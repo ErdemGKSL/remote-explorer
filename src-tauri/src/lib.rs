@@ -2,8 +2,8 @@ use std::time::Duration;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use async_ssh2_tokio::client::{AuthMethod, Client, ServerCheckMethod};
-use tauri_plugin_store::StoreExt;
 use std::path::Path;
+use tauri_plugin_store::StoreExt;
 use tokio::time::timeout;
 
 #[tauri::command]
@@ -96,13 +96,26 @@ async fn validate_ssh_connection(
 pub fn run() {
     #[cfg(target_os = "linux")]
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    let mut builder = tauri::Builder::default();
+    
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            use tauri::Manager;
 
-    tauri::Builder::default()
+            let _ = app
+                .get_webview_window("main")
+                .expect("no main window")
+                .set_focus();
+        }));
+    }
+
+    builder
         .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
             let _store = app.store("store.json")?;
             Ok(())
-        })        
+        })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![greet, validate_ssh_connection])
         .run(tauri::generate_context!())
