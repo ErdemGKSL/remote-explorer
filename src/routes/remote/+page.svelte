@@ -256,7 +256,7 @@
 	}}
 />
 
-<div class="flex h-full flex-col pt-6 md:pt-0">
+<div class="flex h-full flex-col">
 	<!-- Toolbar -->
 	<div class="flex items-center gap-2 border-b p-3 h-12">
 		<Button

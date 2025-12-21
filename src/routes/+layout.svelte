@@ -50,7 +50,7 @@
 </script>
 
 <Toaster />
-<div class="flex h-screen flex-col">
+<div class="flex h-screen flex-col pt-6 md:pt-0">
 	{#if showButtons}
 		<div 
 			class="flex items-center justify-between bg-background border-b px-4 py-2 select-none h-12"
