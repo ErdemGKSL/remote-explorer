@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { storage } from "$lib";
+  import { storage } from "$lib";
   import { Button } from "$lib/components/ui/button";
   import * as ButtonGroup from "$lib/components/ui/button-group";
   import {
@@ -49,8 +49,12 @@
   $effect(() => {
     (async () => {
       try {
-        let projectKeys: Array<string> = (await storage.get("projects")) ?? [];
+        while (!storage) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        let [projectKeys]: Array<string> = (await storage.get("projects")) ?? [];
         let loadedProjects = [];
+        console.log("Loading projects for keys:", projectKeys);
         for (let key of projectKeys) {
           try {
             let project = await storage.get(key);
@@ -65,10 +69,14 @@
                 authMethod: "password" | "key" | "public_key" | "agent";
               });
             }
-          } catch {}
+          } catch (e) {
+            console.error("Failed to load project for key:", key, e);
+          }
         }
         projects = loadedProjects;
-      } catch {}
+      } catch (e) {
+        toast.error("Failed to load projects: " + String(e));
+      }
     })();
   })
   
@@ -112,7 +120,7 @@
       name = host = user = password = keyFile = publicKeyFile = "";
       authMethod = "password";
     } catch (err) {
-      toast.error(String(err));
+      toast.error("UI: " + String(err));
     } finally {
       loading = false;
     }
@@ -143,9 +151,21 @@
         publicKeyFile: project.authMethod === "key" ? project.publicKeyFile : undefined,
         authMethod: project.authMethod,
       });
+      
       if (isValid) {
+        // Start the project and open remote window
+        await invoke("start_project", {
+          key: nameToKey(project.name),
+          name: project.name,
+          host: project.host,
+          user: project.user,
+          password: project.password,
+          keyFile: project.keyFile,
+          publicKeyFile: project.publicKeyFile,
+          authMethod: project.authMethod,
+        });
+        
         toast.success(`Connected to ${project.name}`);
-        console.log("Connected to", project);
       }
     } catch (err) {
       toast.error(String(err));

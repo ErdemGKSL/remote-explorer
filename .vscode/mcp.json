@@ -4,10 +4,10 @@
 			"url": "https://mcp.svelte.dev/mcp"
 		},
 		"shadcn-svelte": {
-			"command": "npx",
+			"command": "bash",
 			"args": [
-				"shadcn-svelte-mcp-server"
-				// ,"--github-api-key", "ghp_your_token_here" // if you can add your github token here to avoid rate limiting
+				"-c",
+				"source ~/.profile\nnpx shadcn-svelte-mcp-server"
 			]
 		}
 	}
