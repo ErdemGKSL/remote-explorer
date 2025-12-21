@@ -1,0 +1,14 @@
+{
+	"servers": {
+		"svelte": {
+			"url": "https://mcp.svelte.dev/mcp"
+		},
+		"shadcn-svelte": {
+			"command": "npx",
+			"args": [
+				"shadcn-svelte-mcp-server"
+				// ,"--github-api-key", "ghp_your_token_here" // if you can add your github token here to avoid rate limiting
+			]
+		}
+	}
+}
