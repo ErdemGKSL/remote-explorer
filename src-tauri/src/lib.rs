@@ -6,8 +6,6 @@ mod state;
 
 use tauri_plugin_store::StoreExt;
 
-
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
@@ -18,14 +16,16 @@ pub fn run() {
 
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            use tauri::Manager;
+        builder = builder
+            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                use tauri::Manager;
 
-            let _ = app
-                .get_webview_window("main")
-                .expect("no main window")
-                .set_focus();
-        }));
+                let _ = app
+                    .get_webview_window("main")
+                    .expect("no main window")
+                    .set_focus();
+            }))
+            .plugin(tauri_plugin_shell::init());
     }
 
     builder
@@ -38,8 +38,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::connection::validate_ssh_connection,
             commands::connection::start_project,
+            commands::connection::close_project,
             commands::connection::get_project,
             commands::connection::get_current_pwd,
+            commands::connection::get_desktop_environment,
             commands::filesystem::get_dir_contents,
             commands::filesystem::create_file,
             commands::filesystem::create_folder,

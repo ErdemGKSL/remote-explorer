@@ -10,6 +10,7 @@
     "opener:default",
     "store:default",
     "os:default",
-    "clipboard-manager:default"
+    "clipboard-manager:default",
+    "shell:default"
   ]
 }

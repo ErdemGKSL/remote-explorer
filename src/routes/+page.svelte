@@ -1,7 +1,6 @@
 <script lang="ts">
   import { storage } from "$lib";
   import { Button } from "$lib/components/ui/button";
-  import * as ButtonGroup from "$lib/components/ui/button-group";
   import {
     Card,
     CardContent,
@@ -9,16 +8,10 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
-  import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-  } from "$lib/components/ui/dialog";
+  import { Input } from "$lib/components/ui/input";
+  import ResponsiveDialog from "$lib/components/ui/responsive-dialog/responsive-dialog.svelte";
   import { invoke } from "@tauri-apps/api/core";
-    import { getStore } from "@tauri-apps/plugin-store";
+  import { getStore } from "@tauri-apps/plugin-store";
   import { toast } from "svelte-sonner";
 
   let projects = $state(
@@ -46,17 +39,45 @@
     return name.toLowerCase().replace(/\s+/g, "_");
   }
 
+  let statusMap: Record<string, "online" | "offline"> = $state({});
+
+  async function checkProjectStatus(project: {
+    name: string;
+    host: string;
+    user: string;
+    password?: string;
+    keyFile?: string;
+    publicKeyFile?: string;
+    authMethod: "password" | "key" | "public_key" | "agent";
+  }) {
+    try {
+      await invoke<boolean>("validate_ssh_connection", {
+        host: project.host,
+        user: project.user,
+        password: project.authMethod === "password" ? project.password : undefined,
+        keyFile: project.authMethod === "key" ? project.keyFile : undefined,
+        publicKeyFile: project.authMethod === "key" ? project.publicKeyFile : undefined,
+        authMethod: project.authMethod,
+      });
+      statusMap[nameToKey(project.name)] = "online";
+    } catch {
+      statusMap[nameToKey(project.name)] = "offline";
+    }
+  }
+
   $effect(() => {
     (async () => {
       try {
         while (!storage) {
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        let [projectKeys]: Array<string> = (await storage.get("projects")) ?? [];
+        let projectKeys: Array<string> = (await storage.get("projects")) ?? [];
         let loadedProjects = [];
-        console.log("Loading projects for keys:", projectKeys);
+        console.log("Loading projects for keys:");
+        console.log(projectKeys);
         for (let key of projectKeys) {
           try {
+            if (!key || typeof key !== "string") continue;
             let project = await storage.get(key);
             if (project) {
               loadedProjects.push(project as {
@@ -74,6 +95,11 @@
           }
         }
         projects = loadedProjects;
+        
+        // Check status for all loaded projects
+        for (let project of loadedProjects) {
+          checkProjectStatus(project);
+        }
       } catch (e) {
         toast.error("Failed to load projects: " + String(e));
       }
@@ -97,9 +123,9 @@
       });
 
       let projectKeys: Array<string> = (await storage.get("projects")) ?? [];
-      storage.set("projects", [
+      storage.set("projects", 
         [nameToKey(name), ...projectKeys]
-      ]);
+      );
 
       storage.set(nameToKey(name), {
         name,
@@ -113,7 +139,11 @@
 
       await storage.save();
 
-      projects.push({ name, host, user, password, keyFile, publicKeyFile, authMethod });
+      const newProject = { name, host, user, password, keyFile, publicKeyFile, authMethod };
+      projects.push(newProject);
+      
+      // Check status for the new project
+      checkProjectStatus(newProject);
 
       toast.success(`Project "${name}" added successfully`);
       open = false;
@@ -171,33 +201,40 @@
       toast.error(String(err));
     }
   }
+
+  // Snippets for ResponsiveDialog
+  function triggerSnippet() {
+    return null;
+  }
+
+  function childrenSnippet() {
+    return null;
+  }
+
 </script>
 
 <main class="min-h-screen bg-background">
   <!-- Header -->
   <header class="border-b bg-card">
-    <div class="mx-auto max-w-7xl px-6 py-6 flex items-center justify-between">
+    <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Remote Explorer</h1>
-        <p class="text-sm text-muted-foreground">
+        <h1 class="text-xl sm:text-2xl font-semibold tracking-tight">Remote Explorer</h1>
+        <p class="text-xs sm:text-sm text-muted-foreground">
           Manage and connect to your remote environments
         </p>
       </div>
-      <Dialog bind:open>
-        <DialogTrigger>
-          <Button size="sm">Add Project</Button>
-        </DialogTrigger>
-        <DialogContent class="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add New Project</DialogTitle>
-          </DialogHeader>
-          <form onsubmit={addProject} class="space-y-4">
+      <ResponsiveDialog bind:open title="Add New Project">
+        {#snippet trigger()}
+          <Button size="sm" class="w-full sm:w-auto">Add Project</Button>
+        {/snippet}
+        
+        <form onsubmit={addProject} class="space-y-4">
             <div class="space-y-1">
               <!-- svelte-ignore a11y_label_has_associated_control -->
               <label class="text-sm font-medium">Project Name</label>
-              <input
-                class="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              <Input
                 bind:value={name}
+                placeholder="My Project"
                 required
                 disabled={loading}
               />
@@ -205,9 +242,9 @@
             <div class="space-y-1">
               <!-- svelte-ignore a11y_label_has_associated_control -->
               <label class="text-sm font-medium">Host</label>
-              <input
-                class="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              <Input
                 bind:value={host}
+                placeholder="example.com or 192.168.1.1:2222"
                 required
                 disabled={loading}
               />
@@ -215,9 +252,9 @@
             <!-- svelte-ignore a11y_label_has_associated_control -->
             <div class="space-y-1">
               <label class="text-sm font-medium">User</label>
-              <input
-                class="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              <Input
                 bind:value={user}
+                placeholder="username"
                 required
                 disabled={loading}
               />
@@ -227,13 +264,14 @@
             <div class="space-y-2">
               <!-- svelte-ignore a11y_label_has_associated_control -->
               <label class="text-sm font-medium">Authentication Method</label>
-              <ButtonGroup.Root>
+              <div class="grid grid-cols-2 gap-2 sm:flex sm:gap-0">
                 <Button
                   type="button"
                   variant={authMethod === "password" ? "default" : "outline"}
                   size="sm"
                   onclick={() => (authMethod = "password")}
                   disabled={loading}
+                  class="text-xs sm:text-sm"
                 >
                   Password
                 </Button>
@@ -243,6 +281,7 @@
                   size="sm"
                   onclick={() => (authMethod = "key")}
                   disabled={loading}
+                  class="text-xs sm:text-sm"
                 >
                   Private Key
                 </Button>
@@ -252,6 +291,7 @@
                   size="sm"
                   onclick={() => (authMethod = "public_key")}
                   disabled={loading}
+                  class="text-xs sm:text-sm"
                 >
                   Public Key
                 </Button>
@@ -261,10 +301,11 @@
                   size="sm"
                   onclick={() => (authMethod = "agent")}
                   disabled={loading}
+                  class="text-xs sm:text-sm"
                 >
                   SSH Agent
                 </Button>
-              </ButtonGroup.Root>
+              </div>
             </div>
 
             <!-- Authentication Fields -->
@@ -272,10 +313,10 @@
               <div class="space-y-1">
                 <!-- svelte-ignore a11y_label_has_associated_control -->
                 <label class="text-sm font-medium">Password</label>
-                <input
+                <Input
                   type="password"
-                  class="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   bind:value={password}
+                  placeholder="Enter your password"
                   required
                   disabled={loading}
                 />
@@ -284,10 +325,9 @@
               <div class="space-y-1">
                 <!-- svelte-ignore a11y_label_has_associated_control -->
                 <label class="text-sm font-medium">Private Key Path</label>
-                <input
+                <Input
                   type="text"
                   placeholder="/home/user/.ssh/id_rsa"
-                  class="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   bind:value={keyFile}
                   required
                   disabled={loading}
@@ -300,10 +340,9 @@
               <div class="space-y-1">
                 <!-- svelte-ignore a11y_label_has_associated_control -->
                 <label class="text-sm font-medium">Public Key Path</label>
-                <input
+                <Input
                   type="text"
                   placeholder="/home/user/.ssh/id_rsa.pub"
-                  class="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   bind:value={publicKeyFile}
                   required
                   disabled={loading}
@@ -320,38 +359,47 @@
               </div>
             {/if}
 
-            <DialogFooter>
-              <Button type="submit" class="w-full" disabled={loading}>
+            <div class="flex gap-2">
+              <Button type="submit" class="flex-1" disabled={loading}>
                 {loading ? "Validating..." : "Create Project"}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
-        </DialogContent>
-      </Dialog>
+      </ResponsiveDialog>
     </div>
   </header>
 
   <!-- Content -->
-  <section class="mx-auto max-w-7xl px-6 py-10">
+  <section class="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
     {#if projects.length === 0}
       <div
-        class="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center"
+        class="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 sm:py-20 text-center px-4"
       >
-        <p class="text-sm text-muted-foreground">No projects yet</p>
-        <p class="mt-1 text-sm">Create your first remote connection</p>
+        <p class="text-xs sm:text-sm text-muted-foreground">No projects yet</p>
+        <p class="mt-1 text-xs sm:text-sm">Create your first remote connection</p>
       </div>
     {:else}
-      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {#each projects as project}
           <Card class="transition hover:shadow-md">
             <CardHeader class="pb-2">
-              <CardTitle class="text-lg">{project.name}</CardTitle>
-            </CardHeader>
-            <CardContent class="space-y-1 text-sm text-muted-foreground">
-              <div>
-                Host: <span class="text-foreground">{project.host}</span>
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="relative shrink-0">
+                  <div
+                    class="h-2.5 w-2.5 rounded-full {statusMap[nameToKey(project.name)] === 'online' ? 'bg-green-500' : 'bg-red-500'}"
+                  ></div>
+                  <div
+                    class="absolute inset-0 h-2.5 w-2.5 rounded-full {statusMap[nameToKey(project.name)] === 'online' ? 'bg-green-500' : 'bg-red-500'} animate-ping opacity-75"
+                  ></div>
+                </div>
+                <CardTitle class="text-base sm:text-lg truncate">{project.name}</CardTitle>
               </div>
-              <div>
+            </CardHeader>
+            <CardContent class="space-y-1 text-xs sm:text-sm text-muted-foreground">
+              <div class="truncate">
+                Host: <span class="text-foreground break-all">{project.host}</span>
+              </div>
+              <div class="truncate">
                 User: <span class="text-foreground">{project.user}</span>
               </div>
               <div>
@@ -367,7 +415,7 @@
               </div>
             </CardContent>
             <CardFooter>
-              <Button class="w-full" onclick={() => connect(project)}
+              <Button class="w-full text-sm sm:text-base" onclick={() => connect(project)}
                 >Connect</Button
               >
             </CardFooter>

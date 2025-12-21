@@ -92,14 +92,12 @@ pub async fn start_project(
         let window_label = format!("remote-{}", key);
         let url = format!("/remote?key={}", key);
 
-        let window = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
+        let _ = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
             .inner_size(1200.0, 800.0)
+            .title(&format!("{} - Remote Explorer", name))
+            .decorations(false)
             .build()
             .map_err(|e| format!("Failed to create window: {}", e))?;
-
-        window
-            .set_title(&format!("{} - Remote Explorer", name))
-            .map_err(|e| format!("Failed to set window title: {}", e))?;
     }
 
     #[cfg(mobile)]
@@ -153,4 +151,52 @@ pub async fn get_current_pwd(key: String) -> Result<String, String> {
     } else {
         Err(format!("Command failed: {}", result.stderr))
     }
+}
+
+#[tauri::command]
+pub async fn close_project(app: tauri::AppHandle, key: String) -> Result<(), String> {
+    // Remove the project from the global state
+    {
+        let mut projects = PROJECTS
+            .lock()
+            .map_err(|e| format!("Failed to lock projects: {}", e))?;
+        let initial_len = projects.len();
+        projects.retain(|p| p.key != key);
+        if projects.len() == initial_len {
+            return Err("Project not found".to_string());
+        }
+    }
+
+    // Handle platform-specific closing
+    #[cfg(desktop)]
+    {
+        use tauri::Manager;
+
+        let window_label = format!("remote-{}", key);
+        if let Some(window) = app.get_webview_window(&window_label) {
+            window
+                .close()
+                .map_err(|e| format!("Failed to close window: {}", e))?;
+        }
+    }
+
+    #[cfg(mobile)]
+    {
+        use tauri::Manager;
+        let main_window = app
+            .get_webview_window("main")
+            .ok_or_else(|| "Main window not found".to_string())?;
+        main_window
+            .eval("window.location.href = '/';")
+            .map_err(|e| format!("Failed to navigate: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_desktop_environment() -> Result<(Option<String>, Option<String>), String> {
+    let xdg_current_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
+    let desktop_session = std::env::var("DESKTOP_SESSION").ok();
+    Ok((xdg_current_desktop, desktop_session))
 }

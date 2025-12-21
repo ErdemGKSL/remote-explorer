@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { } from '@tauri-apps/plugin-clipboard-manager';
+	import {} from "@tauri-apps/plugin-clipboard-manager";
 	import { onMount } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
 	import { page } from "$app/state";
@@ -9,6 +9,7 @@
 		ChevronLeft,
 		House,
 		RefreshCw,
+		Unplug,
 	} from "@lucide/svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { Separator } from "$lib/components/ui/separator";
@@ -16,6 +17,11 @@
 	import * as ContextMenu from "$lib/components/ui/context-menu";
 	import * as Breadcrumb from "$lib/components/ui/breadcrumb";
 	import { loadConnection } from "./connection.svelte";
+	import Input from "$lib/components/ui/input/input.svelte";
+	import * as Dialog from "$lib/components/ui/dialog";
+	import ResponsiveDialog from "$lib/components/ui/responsive-dialog/responsive-dialog.svelte";
+	import { getCurrentWindow } from "@tauri-apps/api/window";
+	import { platform } from "@tauri-apps/plugin-os";
 
 	interface DirEntry {
 		name: string;
@@ -34,9 +40,13 @@
 	let pathInputValue = $state("");
 	let creatingType = $state<"file" | "folder" | null>(null);
 	let newItemName = $state("");
+	let showDeleteDialog = $state(false);
+	let selectedEntry = $state<DirEntry | null>(null);
+	let isMobile = $state(false);
+	const appWindow = getCurrentWindow();
 
 	async function loadDirectory(path: string) {
-		loading = true;
+		loading = entries.length === 0;
 		error = "";
 
 		try {
@@ -50,6 +60,7 @@
 			pathInputValue = path;
 		} catch (e) {
 			error = String(e);
+			entries = [];
 		} finally {
 			loading = false;
 		}
@@ -157,18 +168,32 @@
 		creatingType = null;
 		newItemName = "";
 	}
+	function openDeleteDialog(entry: DirEntry) {
+		selectedEntry = entry;
+		showDeleteDialog = true;
+	}
+
+	async function confirmDelete() {
+		let entry = selectedEntry;
+		showDeleteDialog = false;
+		await new Promise((r) => setTimeout(r, 150)); // wait for dialog close animation
+		selectedEntry = null;
+		if (entry) {
+			await deleteItem(entry);
+		}
+	}
+
 	async function deleteItem(entry: DirEntry) {
-		if (!confirm(`Are you sure you want to delete "${entry.name}"?`)) return;
-
 		try {
-			const fullPath = currentPath === '/' 
-				? `/${entry.name}` 
-				: `${currentPath}/${entry.name}`;
+			const fullPath =
+				currentPath === "/"
+					? `/${entry.name}`
+					: `${currentPath}/${entry.name}`;
 
-			await invoke('delete_item', {
+			await invoke("delete_item", {
 				key: projectKey,
 				path: fullPath,
-				isDir: entry.is_dir
+				isDir: entry.is_dir,
 			});
 
 			await refresh();
@@ -176,7 +201,30 @@
 			error = String(e);
 		}
 	}
+
+	async function closeConnection() {
+		try {
+			await invoke("close_project", { key: projectKey });
+		} catch (e) {
+			error = String(e);
+		}
+	}
+
+	async function minimize() {
+		await appWindow.minimize();
+	}
+
+	async function maximize() {
+		await appWindow.maximize();
+	}
+
+	async function closeWindow() {
+		await appWindow.close();
+	}
+
 	onMount(() => {
+		isMobile = platform() === "android" || platform() === "ios";
+
 		(async () => {
 			try {
 				// Load connection info first
@@ -202,11 +250,13 @@
 	});
 </script>
 
-<svelte:document onpaste={() => {
-	// handle file pasting in the future
-}} />
+<svelte:document
+	onpaste={() => {
+		// handle file pasting in the future
+	}}
+/>
 
-<div class="flex h-screen flex-col pt-6 md:pt-0">
+<div class="flex h-full flex-col pt-6 md:pt-0">
 	<!-- Toolbar -->
 	<div class="flex items-center gap-2 border-b p-3 h-12">
 		<Button
@@ -238,9 +288,8 @@
 			<ContextMenu.Trigger class="flex-1">
 				<div class="flex-1">
 					{#if pathInputFocused}
-						<input
+						<Input
 							type="text"
-							class="w-full rounded border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
 							bind:value={pathInputValue}
 							onfocus={() => (pathInputFocused = true)}
 							onblur={() => (pathInputFocused = false)}
@@ -255,33 +304,35 @@
 										<Breadcrumb.Page>/</Breadcrumb.Page>
 									</Breadcrumb.Item>
 								{:else}
-									<Breadcrumb.Item>
-										<button
-											class="text-muted-foreground hover:text-foreground transition-colors"
-											onclick={(e) => {
-												e.stopPropagation();
-												navigateToBreadcrumb(-1);
-											}}
-										>
-											/
-										</button>
+									<Breadcrumb.Item
+										class="text-muted-foreground hover:text-foreground transition-colors cursor-pointer select-none"
+										onclick={(e) => {
+											e.stopPropagation();
+											navigateToBreadcrumb(-1);
+										}}
+									>
+										/
 									</Breadcrumb.Item>
-									{@const parts = currentPath.split("/").filter((p) => p)}
+									{@const parts = currentPath
+										.split("/")
+										.filter((p) => p)}
 									{#each parts as part, i}
 										<Breadcrumb.Separator />
-										<Breadcrumb.Item>
+										<Breadcrumb.Item
+											class="text-muted-foreground hover:text-foreground px-1 transition-colors select-none {i === parts.length - 1 ? 'cursor-default' : 'cursor-pointer'}"
+											onclick={(e) => {
+												if (i === parts.length - 1)
+													return;
+												e.stopPropagation();
+												navigateToBreadcrumb(i);
+											}}
+										>
 											{#if i === parts.length - 1}
-												<Breadcrumb.Page>{part}</Breadcrumb.Page>
-											{:else}
-												<button
-													class="text-muted-foreground hover:text-foreground transition-colors"
-													onclick={(e) => {
-														e.stopPropagation();
-														navigateToBreadcrumb(i);
-													}}
+												<Breadcrumb.Page
+													>{part}</Breadcrumb.Page
 												>
-													{part}
-												</button>
+											{:else}
+												{part}
 											{/if}
 										</Breadcrumb.Item>
 									{/each}
@@ -308,6 +359,9 @@
 				</ContextMenu.Item>
 			</ContextMenu.Content>
 		</ContextMenu.Root>
+		<Button variant="ghost" size="icon" onclick={closeConnection}>
+			<Unplug class="h-5 w-5" />
+		</Button>
 	</div>
 
 	<!-- File List -->
@@ -325,7 +379,7 @@
 			<div class="text-sm text-muted-foreground">Loading...</div>
 		</div>
 	{:else}
-		<ScrollArea class="flex-1 h-full">
+		<ScrollArea class="flex-1 h-[calc(100vh-3rem)]">
 			<ContextMenu.Root>
 				<ContextMenu.Trigger class="w-full h-full">
 					<div class="divide-y min-h-full">
@@ -362,17 +416,23 @@
 									</button>
 								</ContextMenu.Trigger>
 								<ContextMenu.Content>
-								{#if entry.is_dir}
-									<ContextMenu.Item onclick={() => navigateToEntry(entry)}>Open</ContextMenu.Item>
+									{#if entry.is_dir}
+										<ContextMenu.Item
+											onclick={() =>
+												navigateToEntry(entry)}
+											>Open</ContextMenu.Item
+										>
+										<ContextMenu.Separator />
+									{/if}
+									<ContextMenu.Item>Copy</ContextMenu.Item>
+									<ContextMenu.Item>Cut</ContextMenu.Item>
+									<ContextMenu.Item>Paste</ContextMenu.Item>
 									<ContextMenu.Separator />
-								{/if}
-								<ContextMenu.Item>Copy</ContextMenu.Item>
-								<ContextMenu.Item>Cut</ContextMenu.Item>
-								<ContextMenu.Item>Paste</ContextMenu.Item>
-								<ContextMenu.Separator />
-								<ContextMenu.Item>Rename</ContextMenu.Item>
-								<ContextMenu.Item class="text-destructive"
-									onclick={() => deleteItem(entry)}>Delete</ContextMenu.Item
+									<ContextMenu.Item>Rename</ContextMenu.Item>
+									<ContextMenu.Item
+										class="text-destructive"
+										onclick={() => openDeleteDialog(entry)}
+										>Delete</ContextMenu.Item
 									>
 								</ContextMenu.Content>
 							</ContextMenu.Root>
@@ -390,9 +450,8 @@
 										class="h-5 w-5 text-muted-foreground"
 									/>
 								{/if}
-								<input
+								<Input
 									type="text"
-									class="creating-item-input flex-1 bg-background border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
 									bind:value={newItemName}
 									onkeydown={(e) => {
 										if (e.key === "Enter") {
@@ -429,4 +488,31 @@
 			</ContextMenu.Root>
 		</ScrollArea>
 	{/if}
+
+	<!-- Delete Confirmation Dialog -->
+	<ResponsiveDialog
+		bind:open={showDeleteDialog}
+		title="Delete Item"
+		onOpenChange={(open) => {
+			if (!open) selectedEntry = null;
+		}}
+	>
+		{#snippet trigger()}
+			<!-- svelte-ignore element_invalid_self_closing_tag -->
+			<span class="hidden" />
+		{/snippet}
+		{#snippet children()}
+			<p>
+				Are you sure you want to delete "{selectedEntry?.name}"? This
+				action cannot be undone.
+			</p>
+		{/snippet}
+		{#snippet footer()}
+			<Button variant="outline" onclick={() => (showDeleteDialog = false)}
+				>Cancel</Button
+			>
+			<Button variant="destructive" onclick={confirmDelete}>Delete</Button
+			>
+		{/snippet}
+	</ResponsiveDialog>
 </div>
