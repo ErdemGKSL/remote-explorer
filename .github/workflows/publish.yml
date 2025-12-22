@@ -69,16 +69,25 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
-      - name: build tauri app
+      - name: build tauri app (desktop)
+        if: !contains(matrix.args, 'android')
         run: bun tauri build ${{ matrix.args }}
+
+      - name: build tauri android apk
+        if: contains(matrix.args, 'android')
+        run: bun run tauri android build --apk true
 
       - name: collect artifacts
         shell: bash
         run: |
           mkdir -p release
-          find src-tauri/target/release -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.app" \) -exec cp -r {} release/ \;
+          find src-tauri/target -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.apk" \) -exec cp -r {} release/ \;
 
       - name: upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.platform }}
+          path: release/*
         uses: actions/upload-artifact@v4
         with:
           name: tauri-${{ matrix.platform }}
