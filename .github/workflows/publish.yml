@@ -34,7 +34,6 @@ jobs:
             args: ''
           - platform: 'windows-latest'
             args: ''
-
           # Android APK build
           - platform: 'ubuntu-22.04'
             args: 'android'
@@ -42,6 +41,14 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+
+      # ---------- Java (must be before Android SDK setup) ----------
+      - name: setup JDK 17 (for Android)
+        if: contains(matrix.args, 'android')
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: install dependencies (ubuntu only)
         if: startsWith(matrix.platform, 'ubuntu')
@@ -53,8 +60,7 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            pkg-config \
-            openjdk-17-jdk
+            pkg-config
 
       # ---------- Android SDK / NDK ----------
       - name: setup Android SDK
