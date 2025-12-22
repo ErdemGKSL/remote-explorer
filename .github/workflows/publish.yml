@@ -223,7 +223,7 @@ jobs:
             useradd -m builder
             chown -R builder:builder /pkg
             cd /pkg
-            su builder -c 'makepkg --skippgpcheck'
+            su builder -c 'makepkg --nodeps --skippgpcheck'
           "
           
           # Move the package to release directory
