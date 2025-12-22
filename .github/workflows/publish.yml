@@ -206,7 +206,7 @@ jobs:
           fi
           
           # Copy the deb file to the build directory (handle spaces in filename)
-          cp "$DEB_FILE" "remote-explorer-${VERSION}.deb"
+          cp "../$DEB_FILE" "remote-explorer-${VERSION}.deb"
           
           # Calculate SHA256
           SHA256=$(sha256sum "remote-explorer-${VERSION}.deb" | awk '{print $1}')
@@ -214,7 +214,7 @@ jobs:
           
           # Update PKGBUILD with version and checksum
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
-          sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums(''${SHA256}'')/" PKGBUILD
           
           # Build in Docker to avoid dependency issues
           docker run --rm -v "$PWD:/pkg" archlinux:latest bash -c "
