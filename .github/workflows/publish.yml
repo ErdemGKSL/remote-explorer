@@ -113,6 +113,15 @@ jobs:
         if: contains(matrix.args, 'android')
         run: bun run tauri android init
 
+      - name: setup Android signing
+        if: contains(matrix.args, 'android')
+        run: |
+          cd src-tauri/gen/android
+          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" > keystore.properties
+          echo "password=${{ secrets.ANDROID_KEY_PASSWORD }}" >> keystore.properties
+          base64 -d <<< "${{ secrets.ANDROID_KEY_BASE64 }}" > $RUNNER_TEMP/keystore.jks
+          echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
+
       - name: build tauri android apk
         if: contains(matrix.args, 'android')
         run: bun run tauri android build --apk true
