@@ -132,14 +132,17 @@ jobs:
         shell: bash
         run: |
           mkdir -p release
-          find src-tauri/target -type f \( \
+          find src-tauri -type f \( \
             -name "*.AppImage" -o \
             -name "*.deb" -o \
             -name "*.msi" -o \
-            -name "*.exe" -o \
+            -name "*setup.exe" -o \
             -name "*.dmg" -o \
             -name "*.apk" \
           \) -exec cp -r {} release/ \;
+          if [ -f "release/app-universal-release.apk" ]; then
+            mv release/app-universal-release.apk release/remote-explorer.apk
+          fi
 
       - name: upload artifacts
         uses: actions/upload-artifact@v4
