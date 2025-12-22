@@ -164,6 +164,11 @@ jobs:
           merge-multiple: true
           path: artifacts
 
+      - name: list artifacts
+        run: |
+          echo "Contents of artifacts directory:"
+          ls -laR artifacts/
+
       - name: find deb file
         id: deb
         run: |
@@ -190,10 +195,15 @@ jobs:
           
           # Extract version from deb filename
           DEB_NAME=$(basename "${{ steps.deb.outputs.deb_file }}")
-          VERSION=$(echo "$DEB_NAME" | sed -n 's/remote-explorer_\(.*\)_amd64.deb/\1/p')
+          VERSION=$(echo "$DEB_NAME" | sed -n 's/.*_\([0-9.]*\)_amd64.deb/\1/p')
           echo "Detected version: $VERSION"
           
-          # Copy the deb file to the build directory
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from: $DEB_NAME"
+            exit 1
+          fi
+          
+          # Copy the deb file to the build directory (handle spaces in filename)
           cp "${{ steps.deb.outputs.deb_file }}" "remote-explorer-${VERSION}.deb"
           
           # Calculate SHA256
