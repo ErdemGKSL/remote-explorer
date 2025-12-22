@@ -214,7 +214,7 @@ jobs:
           
           # Update PKGBUILD with version and checksum
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
-          sed -i "s/^sha256sums=.*/sha256sums(''${SHA256}'')/" PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
           
           # Build in Docker to avoid dependency issues
           docker run --rm -v "$PWD:/pkg" archlinux:latest bash -c "
