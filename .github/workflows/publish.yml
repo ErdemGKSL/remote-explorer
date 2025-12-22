@@ -23,6 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Desktop builds
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
           - platform: 'macos-latest'
@@ -34,11 +35,14 @@ jobs:
           - platform: 'windows-latest'
             args: ''
 
+          # Android APK build
+          - platform: 'ubuntu-22.04'
+            args: 'android'
+
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      # Match official Tauri example exactly
       - name: install dependencies (ubuntu only)
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
@@ -49,8 +53,32 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            pkg-config
+            pkg-config \
+            openjdk-17-jdk
 
+      # ---------- Android SDK / NDK ----------
+      - name: setup Android SDK
+        if: contains(matrix.args, 'android')
+        uses: android-actions/setup-android@v3
+
+      - name: install Android SDK components
+        if: contains(matrix.args, 'android')
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;26.1.10909125" \
+            "cmake;3.22.1"
+
+      - name: export Android env
+        if: contains(matrix.args, 'android')
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
+
+      # ---------- Frontend ----------
       - name: setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -59,34 +87,44 @@ jobs:
       - name: install frontend dependencies
         run: bun install --frozen-lockfile
 
+      # ---------- Rust ----------
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ contains(matrix.args, 'android') && 'aarch64-linux-android' || (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '') }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
+      # ---------- Build ----------
       - name: build tauri app (desktop)
         if: ${{ !contains(matrix.args, 'android') }}
         run: bun tauri build ${{ matrix.args }}
 
       - name: build tauri android apk
         if: contains(matrix.args, 'android')
-        run: bun run tauri android build --apk true
+        run: bunx tauri android build --apk
 
+      # ---------- Artifacts ----------
       - name: collect artifacts
         shell: bash
         run: |
           mkdir -p release
-          find src-tauri/target -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.apk" \) -exec cp -r {} release/ \;
+          find src-tauri/target -type f \( \
+            -name "*.AppImage" -o \
+            -name "*.deb" -o \
+            -name "*.msi" -o \
+            -name "*.exe" -o \
+            -name "*.dmg" -o \
+            -name "*.apk" \
+          \) -exec cp -r {} release/ \;
 
       - name: upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-${{ matrix.platform }}
+          name: tauri-${{ matrix.platform }}-${{ matrix.args }}
           path: release/*
 
   create-dev-release:
