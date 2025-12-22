@@ -38,17 +38,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # for Arm based macs (M1 and above).
+          - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest' # for Intel based macs.
+          - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
-          - platform: 'ubuntu-22.04-arm' # Only available in public repos.
+          - platform: 'ubuntu-22.04-arm'
             args: ''
           - platform: 'windows-latest'
             args: ''
-          - platform: 'ubuntu-22.04' # for Android Arm64
+          - platform: 'ubuntu-22.04'
             args: '--target aarch64-linux-android'
 
     runs-on: ${{ matrix.platform }}
@@ -85,16 +85,26 @@ jobs:
           base64 -d <<< "${{ secrets.ANDROID_KEY_BASE64 }}" > $RUNNER_TEMP/keystore.jks
           echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
 
-      - name: setup node
-        uses: actions/setup-node@v4
+      - name: setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: lts/*
-          cache: 'yarn' # Set this to npm, yarn or pnpm.
+          bun-version: latest
+
+      - name: Bun cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: install frontend dependencies
+        run: bun install --frozen-lockfile
 
       - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable # Set this to dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
         with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || contains(matrix.args, 'android') && 'aarch64-linux-android' || '' }}
 
       - name: Rust cache
@@ -102,19 +112,9 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
-      - name: install frontend dependencies
-        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
-        run: yarn install # change this to npm or pnpm depending on which one you use.
-
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Windows signing (follow Windows Code Signing guide; add certificate as secret)
-          # WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          # WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-          # macOS signing (follow macOS Code Signing guide; add certificate as secret)
-          # MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          # MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Release ${{ github.ref_name }}'
