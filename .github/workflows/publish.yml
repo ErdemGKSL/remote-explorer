@@ -172,9 +172,8 @@ jobs:
         run: |
           echo "Contents of release directory:"
           ls -laR release/
-
-      - name: find deb file
-        id: deb
+          
+      - name: build arch package
         run: |
           DEB_FILE=$(find release -name "*.deb" -type f | head -n 1)
           if [ -z "$DEB_FILE" ]; then
@@ -184,8 +183,7 @@ jobs:
           echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
           echo "Found: $DEB_FILE"
 
-      - name: build arch package
-        run: |
+
           # Install required tools
           sudo apt-get update
           sudo apt-get install -y libarchive-tools
@@ -198,7 +196,7 @@ jobs:
           cp ../PKGBUILD-bin PKGBUILD
           
           # Extract version from deb filename
-          DEB_NAME=$(basename "${{ steps.deb.outputs.deb_file }}")
+          DEB_NAME=$(basename "$DEB_FILE")
           VERSION=$(echo "$DEB_NAME" | sed -n 's/.*_\([0-9.]*\)_amd64.deb/\1/p')
           echo "Detected version: $VERSION"
           
@@ -208,7 +206,7 @@ jobs:
           fi
           
           # Copy the deb file to the build directory (handle spaces in filename)
-          cp "${{ steps.deb.outputs.deb_file }}" "remote-explorer-${VERSION}.deb"
+          cp "$DEB_FILE" "remote-explorer-${VERSION}.deb"
           
           # Calculate SHA256
           SHA256=$(sha256sum "remote-explorer-${VERSION}.deb" | awk '{print $1}')
