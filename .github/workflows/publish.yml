@@ -162,19 +162,19 @@ jobs:
         with:
           pattern: tauri-ubuntu-22.04-
           merge-multiple: true
-          path: artifacts
+          path: release
 
       - name: list artifacts
         run: |
-          echo "Contents of artifacts directory:"
-          ls -laR artifacts/
+          echo "Contents of release directory:"
+          ls -laR release/
 
       - name: find deb file
         id: deb
         run: |
-          DEB_FILE=$(find artifacts -name "*.deb" -type f | head -n 1)
+          DEB_FILE=$(find release -name "*.deb" -type f | head -n 1)
           if [ -z "$DEB_FILE" ]; then
-            echo "No .deb file found"
+            echo "No .deb file found in release directory"
             exit 1
           fi
           echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
@@ -233,6 +233,7 @@ jobs:
         with:
           name: tauri-arch-linux
           path: release-arch/*.pkg.tar.zst
+
 
   create-dev-release:
     name: Create Development Release
