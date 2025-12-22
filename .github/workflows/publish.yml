@@ -60,7 +60,8 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            pkg-config
+            pkg-config \
+            xdg-utils
 
       # ---------- Android SDK / NDK ----------
       - name: setup Android SDK
