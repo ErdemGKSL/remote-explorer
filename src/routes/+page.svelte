@@ -13,6 +13,9 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getStore } from "@tauri-apps/plugin-store";
   import { toast } from "svelte-sonner";
+	import { platform } from "@tauri-apps/plugin-os"
+
+  let platformName = platform();
 
   let projects = $state(
     [] as {
@@ -285,16 +288,18 @@
                 >
                   Private Key
                 </Button>
-                <Button
-                  type="button"
-                  variant={authMethod === "public_key" ? "default" : "outline"}
-                  size="sm"
-                  onclick={() => (authMethod = "public_key")}
-                  disabled={loading}
-                  class="text-xs sm:text-sm"
-                >
-                  Public Key
-                </Button>
+                {#if platformName !== "windows"}
+                  <Button
+                    type="button"
+                    variant={authMethod === "public_key" ? "default" : "outline"}
+                    size="sm"
+                    onclick={() => (authMethod = "public_key")}
+                    disabled={loading}
+                    class="text-xs sm:text-sm"
+                  >
+                    Public Key
+                  </Button>
+                {/if}
                 <Button
                   type="button"
                   variant={authMethod === "agent" ? "default" : "outline"}
