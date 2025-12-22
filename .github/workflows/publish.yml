@@ -8,28 +8,15 @@ on:
 
 permissions:
   contents: write
-  packages: write
+  packages: read
+  actions: read
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          body: 'See the assets to download this version and install.'
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   publish-tauri:
-    name: Build and Publish
-    needs: create-release
+    name: Build Tauri Artifacts
     permissions:
       contents: write
     strategy:
@@ -46,14 +33,12 @@ jobs:
             args: ''
           - platform: 'windows-latest'
             args: ''
-          - platform: 'ubuntu-22.04'
-            args: '--target aarch64-linux-android'
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      # Match official Tauri example: install deps ONLY on ubuntu-22.04
+      # Match official Tauri example exactly
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -66,41 +51,10 @@ jobs:
             patchelf \
             pkg-config
 
-      - name: setup Java (Android builds only)
-        if: contains(matrix.args, 'android')
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: setup Android SDK (Android builds only)
-        if: contains(matrix.args, 'android')
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 33
-          build-tools: 33.0.2
-          ndk-version: 25.2.9519653
-
-      - name: setup Android signing (Android builds only)
-        if: contains(matrix.args, 'android')
-        run: |
-          cd src-tauri/gen/android
-          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" > keystore.properties
-          echo "password=${{ secrets.ANDROID_KEY_PASSWORD }}" >> keystore.properties
-          base64 -d <<< "${{ secrets.ANDROID_KEY_BASE64 }}" > $RUNNER_TEMP/keystore.jks
-          echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
-
       - name: setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-
-      - name: Bun cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
-          restore-keys: ${{ runner.os }}-bun-
 
       - name: install frontend dependencies
         run: bun install --frozen-lockfile
@@ -108,7 +62,6 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Follow official example: only macOS needs explicit targets
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
@@ -116,13 +69,96 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: build tauri app
+        run: bun tauri build ${{ matrix.args }}
+
+      - name: collect artifacts
+        shell: bash
+        run: |
+          mkdir -p release
+          find src-tauri/target/release -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.app" \) -exec cp -r {} release/ \;
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Release ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: false
+          name: tauri-${{ matrix.platform }}
+          path: release/*
+
+  create-dev-release:
+    name: Create Development Release
+    runs-on: ubuntu-latest
+    needs: publish-tauri
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: prepare release directory
+        run: |
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+          ls -la release
+
+      - name: generate dev tag
+        id: tag
+        run: |
+          TAG="dev-$(date +'%Y%m%d-%H%M%S')"
+          BUILD_DATE="$(date +'%B %d, %Y at %H:%M:%S UTC')"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+
+      - name: create development release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Development Release ${{ steps.tag.outputs.tag }}"
+          body: |
+            🚀 **Automatic Development Release**
+
+            **Branch:** ${{ github.ref_name }}
+            **Commit:** ${{ github.sha }}
+            **Build Date:** ${{ steps.tag.outputs.build_date }}
+
+            This release was generated automatically from the latest commit.
+
+            ## Included Artifacts
+            All platform installers produced by the Tauri build matrix are attached.
+
+            **Note:** This is a development release. Use stable releases for production.
+          files: release/*
+          draft: false
           prerelease: false
-          args: ${{ matrix.args }}
+
+  cleanup-old-dev-releases:
+    name: Cleanup Old Dev Releases
+    runs-on: ubuntu-latest
+    needs: create-dev-release
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: delete old dev releases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const releases = await github.rest.repos.listReleases({ owner, repo });
+
+            const devReleases = releases.data.filter(r => r.tag_name.startsWith('dev-'));
+            const toDelete = devReleases.slice(3);
+
+            for (const release of toDelete) {
+              await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
+              try {
+                await github.rest.git.deleteRef({ owner, repo, ref: `tags/${release.tag_name}` });
+              } catch (e) {}
+            }
