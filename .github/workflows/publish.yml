@@ -103,9 +103,13 @@ jobs:
         if: ${{ !contains(matrix.args, 'android') }}
         run: bun tauri build ${{ matrix.args }}
 
+      - name: build tauri android init
+        if: contains(matrix.args, 'android')
+        run: bun run tauri android init
+
       - name: build tauri android apk
         if: contains(matrix.args, 'android')
-        run: bunx tauri android build --apk
+        run: bun run tauri android build --apk true
 
       # ---------- Artifacts ----------
       - name: collect artifacts
