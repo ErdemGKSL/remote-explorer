@@ -1,6 +1,6 @@
 use async_ssh2_tokio::client::Client;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, mpsc};
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -8,7 +8,15 @@ use std::sync::Arc;
 pub struct TerminalConnection {
     pub id: String,
     pub connection: Arc<Client>,
-    pub path: String, // this is a start path, if user changes it by cd command, this path is not updated
+    pub content_lines: Arc<Mutex<Vec<String>>>,
+    pub current_executions: Arc<Mutex<Vec<TerminalExecution>>>,
+    pub path: String,
+}
+
+#[allow(dead_code)]
+pub struct TerminalExecution {
+    pub stdin_tx: mpsc::Sender<Vec<u8>>,
+    pub command: String,
 }
 
 #[allow(dead_code)]
