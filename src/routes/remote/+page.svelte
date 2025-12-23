@@ -52,7 +52,9 @@
 
 	// Get terminals for current path
 	let currentPathTerminals = $derived(
-		terminalManager.getTerminalsForPath(currentPath)
+		terminalManager.terminals.values().filter(
+			(t) => t.path === currentPath
+		).toArray()
 	);
 
 	async function loadDirectory(path: string) {

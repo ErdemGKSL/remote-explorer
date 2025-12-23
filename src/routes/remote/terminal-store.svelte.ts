@@ -15,8 +15,8 @@ export interface TerminalLine {
 }
 
 class TerminalManager {
-	private terminals = $state<Map<string, Terminal>>(new Map());
-	private projectKey = $state<string>("");
+	terminals = $state<Map<string, Terminal>>(new Map());
+	projectKey = $state<string>("");
 
 	setProjectKey(key: string) {
 		this.projectKey = key;
