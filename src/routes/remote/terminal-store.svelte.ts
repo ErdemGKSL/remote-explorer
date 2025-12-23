@@ -1,165 +1,250 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export interface TerminalLine {
+	type: "command" | "output" | "error";
+	content: string;
+}
+
 export interface Terminal {
 	id: string;
 	path: string;
 	history: TerminalLine[];
-	currentCommand: string;
-}
-
-export interface TerminalLine {
-	type: "command" | "output" | "error";
-	content: string;
-	timestamp: number;
+	rawContent: string; // Store raw terminal output
+	lastProcessedLength: number; // Track what we've already processed
 }
 
 class TerminalManager {
-	terminals = $state<Map<string, Terminal>>(new Map());
+	terminals = $state<Record<string, Terminal>>({});
 	projectKey = $state<string>("");
 
 	setProjectKey(key: string) {
 		this.projectKey = key;
 	}
 
-	getTerminals() {
-		return Array.from(this.terminals.values());
-	}
-
-	getTerminalsForPath(path: string) {
-		return Array.from(this.terminals.values()).filter((t) => t.path === path);
-	}
-
-	getTerminal(id: string) {
-		return this.terminals.get(id);
-	}
-
-	async createTerminal(path: string): Promise<string> {
+	async createTerminal(path: string): Promise<Terminal> {
 		try {
-			const id = await invoke<string>("create_terminal", {
+			console.log("Creating terminal at path:", path);
+			const terminalId = await invoke<string>("create_terminal", {
 				key: this.projectKey,
-				name,
 				path,
 			});
+
+			console.log("Terminal created with ID:", terminalId);
 
 			const terminal: Terminal = {
-				id,
+				id: terminalId,
 				path,
-				history: [
-					{
-						type: "output",
-						content: `Terminal "${name}" started at ${path}`,
-						timestamp: Date.now(),
-					},
-				],
-				currentCommand: "",
+				history: [],
+				rawContent: "",
+				lastProcessedLength: 0,
 			};
 
-			this.terminals.set(id, terminal);
-			return id;
+			// Add to map
+			this.terminals[terminalId] = terminal;
+
+			// Start polling for this terminal
+			this.startPolling(terminalId);
+
+			return terminal;
 		} catch (error) {
-			throw new Error(`Failed to create terminal: ${error}`);
+			console.error("Failed to create terminal:", error);
+			throw error;
 		}
 	}
 
-	async executeCommand(terminalId: string, command: string): Promise<void> {
-		const terminal = this.terminals.get(terminalId);
-		if (!terminal) throw new Error("Terminal not found");
-
-		// Add command to history
-		terminal.history.push({
-			type: "command",
-			content: command,
-			timestamp: Date.now(),
-		});
-
+	async loadTerminals() {
 		try {
-			const [stdout, stderr, exitStatus] = await invoke<[string, string, number]>(
-				"execute_terminal_command",
-				{
-					key: this.projectKey,
-					terminalId,
-					command,
-				}
-			);
-
-			// Add output to history
-			if (stdout.trim()) {
-				terminal.history.push({
-					type: "output",
-					content: stdout,
-					timestamp: Date.now(),
-				});
-			}
-
-			if (stderr.trim()) {
-				terminal.history.push({
-					type: "error",
-					content: stderr,
-					timestamp: Date.now(),
-				});
-			}
-
-			if (exitStatus !== 0 && !stderr.trim()) {
-				terminal.history.push({
-					type: "error",
-					content: `Command exited with status ${exitStatus}`,
-					timestamp: Date.now(),
-				});
-			}
-
-			// Update terminal reference to trigger reactivity
-			this.terminals.set(terminalId, { ...terminal });
-		} catch (error) {
-			terminal.history.push({
-				type: "error",
-				content: `Error: ${error}`,
-				timestamp: Date.now(),
-			});
-			this.terminals.set(terminalId, { ...terminal });
-		}
-	}
-
-	async closeTerminal(terminalId: string): Promise<void> {
-		try {
-			await invoke("close_terminal", {
-				key: this.projectKey,
-				terminalId,
-			});
-			this.terminals.delete(terminalId);
-		} catch (error) {
-			throw new Error(`Failed to close terminal: ${error}`);
-		}
-	}
-
-	async loadTerminals(): Promise<void> {
-		try {
-			const terminals = await invoke<[string, string, string][]>("list_terminals", {
+			const terminalList = await invoke<Array<[string, string]>>("list_terminals", {
 				key: this.projectKey,
 			});
 
-			for (const [id, name, path] of terminals) {
-				if (!this.terminals.has(id)) {
-					this.terminals.set(id, {
-						id,
-						path,
-						history: [
-							{
-								type: "output",
-								content: `Terminal "${name}" reconnected`,
-								timestamp: Date.now(),
-							},
-						],
-						currentCommand: "",
+			console.log("Loaded terminals:", terminalList);
+
+			// Clear existing terminals
+			this.terminals = {};
+
+			// Add loaded terminals
+			for (const [id, path] of terminalList) {
+				const terminal: Terminal = {
+					id,
+					path,
+					history: [],
+					rawContent: "",
+					lastProcessedLength: 0,
+				};
+				this.terminals[id] = terminal;
+				
+				// Load existing content
+				try {
+					const content = await invoke<string>("get_terminal_content", {
+						key: this.projectKey,
+						terminalId: id,
 					});
+					
+					terminal.rawContent = content;
+					terminal.history = this.parseTerminalOutput(content);
+					terminal.lastProcessedLength = content.length;
+				} catch (e) {
+					console.error(`Failed to load content for terminal ${id}:`, e);
 				}
+
+				// Start polling
+				this.startPolling(id);
 			}
+
+			// Force reactivity update
+			this.terminals = { ...this.terminals };
 		} catch (error) {
 			console.error("Failed to load terminals:", error);
 		}
 	}
 
+	async executeCommand(terminalId: string, command: string) {
+		const terminal = this.terminals[terminalId];
+		if (!terminal) {
+			console.error("Terminal not found:", terminalId);
+			return;
+		}
+
+		try {
+			// Add command to history for display
+			terminal.history.push({
+				type: "command",
+				content: command,
+			});
+
+			// Execute command
+			await invoke("execute_terminal_command", {
+				key: this.projectKey,
+				terminalId,
+				command,
+			});
+
+			console.log("Command executed:", command);
+
+			// Poll for output immediately after a short delay
+			setTimeout(() => this.pollTerminalOutput(terminalId), 200);
+		} catch (error) {
+			console.error("Failed to execute command:", error);
+			terminal.history.push({
+				type: "error",
+				content: `Error: ${error}`,
+			});
+		}
+	}
+
+	private parseTerminalOutput(content: string): TerminalLine[] {
+		if (!content) return [];
+		
+		// Split by lines but keep the terminal output continuous
+		const lines: TerminalLine[] = [];
+		const contentLines = content.split('\n');
+		
+		for (const line of contentLines) {
+			if (line.trim()) {
+				lines.push({
+					type: "output",
+					content: line,
+				});
+			}
+		}
+		
+		return lines;
+	}
+
+	private startPolling(terminalId: string) {
+		// Poll every 300ms for new output
+		const poll = async () => {
+			if (!this.terminals[terminalId]) {
+				return; // Terminal was closed
+			}
+			await this.pollTerminalOutput(terminalId);
+			setTimeout(poll, 300);
+		};
+		
+		setTimeout(poll, 300);
+	}
+
+	private async pollTerminalOutput(terminalId: string) {
+		const terminal = this.terminals[terminalId];
+		
+		if (!terminal) return;
+
+		try {
+			const content = await invoke<string>("get_terminal_content", {
+				key: this.projectKey,
+				terminalId,
+			});
+
+			// Check if there's new content
+			if (content.length > terminal.lastProcessedLength) {
+				// Get only the new content
+				const newContent = content.substring(terminal.lastProcessedLength);
+				terminal.rawContent = content;
+				console.log("New terminal content:", newContent);
+				// Parse new lines and add to history
+				const newLines = newContent.split('\n').filter(line => line.trim());
+				let lastExecutedCommands = [];
+				for (const line of terminal.history.slice().reverse()) {
+					if (line.type === "command") {
+						lastExecutedCommands.push(line.content.trim());
+					} else {
+						break;
+					}
+				}
+
+				for (const line of newLines) {
+					if (lastExecutedCommands.includes(line.trim())) {
+						// Skip echo of last executed commands
+						continue;
+					}
+
+					console.log({
+						lastExecutedCommands,
+						line,
+					})
+					terminal.history.push({
+						type: "output",
+						content: line.trim(),
+					});
+				}
+
+				console.log("Updated terminal history:", terminal.history);
+
+				terminal.lastProcessedLength = content.length;
+
+				// Force update
+				this.terminals = { ...this.terminals };
+			}
+		} catch (error) {
+			// Silently fail - terminal might be closing
+			console.debug("Failed to poll terminal output:", error);
+		}
+	}
+
+	async closeTerminal(terminalId: string) {
+		try {
+			await invoke("close_terminal", {
+				key: this.projectKey,
+				terminalId,
+			});
+
+			delete this.terminals[terminalId];
+			
+			// Force reactivity update
+			this.terminals = { ...this.terminals };
+			
+			console.log("Terminal closed:", terminalId);
+		} catch (error) {
+			console.error("Failed to close terminal:", error);
+		}
+	}
+
 	clearAll() {
-		this.terminals.clear();
+		// Close all terminals
+		for (const terminalId of Object.keys(this.terminals)) {
+			this.closeTerminal(terminalId).catch(console.error);
+		}
 	}
 }
 

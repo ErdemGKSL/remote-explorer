@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub struct TerminalConnection {
     pub id: String,
     pub connection: Arc<Client>,
-    pub content_lines: Arc<Mutex<Vec<String>>>,
+    pub content_lines: Arc<Mutex<String>>, // Changed from Vec<String> to String
     pub current_executions: Arc<Mutex<Vec<TerminalExecution>>>,
     pub path: String,
 }

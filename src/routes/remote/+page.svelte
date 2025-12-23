@@ -18,6 +18,7 @@
 	import { ScrollArea } from "$lib/components/ui/scroll-area";
 	import * as ContextMenu from "$lib/components/ui/context-menu";
 	import * as Breadcrumb from "$lib/components/ui/breadcrumb";
+	import * as Resizable from "$lib/components/ui/resizable";
 	import { loadConnection } from "./connection.svelte";
 	import Input from "$lib/components/ui/input/input.svelte";
 	import ResponsiveDialog from "$lib/components/ui/responsive-dialog/responsive-dialog.svelte";
@@ -25,6 +26,9 @@
 	import { platform } from "@tauri-apps/plugin-os";
 	import Terminal from "./terminal.svelte";
 	import { terminalManager } from "./terminal-store.svelte";
+
+	let currentPlatform = platform();
+	let isMobileBuild = currentPlatform === 'android' || currentPlatform === 'ios';
 
 	interface DirEntry {
 		name: string;
@@ -46,13 +50,29 @@
 	let showDeleteDialog = $state(false);
 	let selectedEntry = $state<DirEntry | null>(null);
 	let isMobile = $state(false);
+	let activeTerminalId = $state<string | null>(null);
 	const appWindow = getCurrentWindow();
 
 	// Get terminals for current path
 	let currentPathTerminals = $derived(
-		terminalManager.terminals.values().filter(
+		Object.values(terminalManager.terminals).filter(
 			(t) => t.path === currentPath
-		).toArray()
+		)
+	);
+
+	// Auto-select first terminal or maintain selection
+	$effect(() => {
+		if (currentPathTerminals.length > 0) {
+			if (!activeTerminalId || !currentPathTerminals.find(t => t.id === activeTerminalId)) {
+				activeTerminalId = currentPathTerminals[0].id;
+			}
+		} else {
+			activeTerminalId = null;
+		}
+	});
+
+	let activeTerminal = $derived(
+		currentPathTerminals.find(t => t.id === activeTerminalId)
 	);
 
 	async function loadDirectory(path: string) {
@@ -294,8 +314,6 @@
 			<House class="h-5 w-5" />
 		</Button>
 		<Separator orientation="vertical" class="h-6" />
-		
-		<Separator orientation="vertical" class="h-6" />
 		<ContextMenu.Root>
 			<ContextMenu.Trigger class="flex-1">
 				<div class="flex-1">
@@ -374,167 +392,365 @@
 		<Button
 			variant="default"
 			size="sm"
-			onclick={() => {
-				// createNewTerminal();
-			}}
+			onclick={createNewTerminal}
 			title="New Terminal"
-			class="gap-1 opacity-30 disabled cursor-not-allowed"
+			class="gap-1"
 		>
 			<Plus class="h-4 w-4" />
 			<TerminalIcon class="h-4 w-4" />
 		</Button>
-		<Button variant="ghost" size="icon" onclick={closeConnection}>
-			<Unplug class="h-5 w-5" />
-		</Button>
+		{#if isMobileBuild}
+			<Button variant="ghost" size="icon" onclick={closeConnection}>
+				<Unplug class="h-5 w-5" />
+			</Button>
+		{/if}
 	</div>
 
-	<!-- Main Content Area -->
-	<div class="flex-1 flex flex-col min-h-0">
-		<!-- Terminals Section -->
-		{#if currentPathTerminals.length > 0}
-			<div class="border-b">
-				<div class="p-2 space-y-2 max-h-96 overflow-y-auto">
-					<div class="grid gap-2 {currentPathTerminals.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}">
-						{#each currentPathTerminals as terminal (terminal.id)}
-							<div class="h-64">
-								<Terminal {terminal} />
+	<!-- Main Content Area with Terminal -->
+	{#if currentPathTerminals.length > 0}
+		<Resizable.PaneGroup direction="vertical" class="flex-1">
+			<!-- File Browser Pane -->
+			<Resizable.Pane defaultSize={70} minSize={30}>
+				<div class="h-full flex flex-col">
+					{#if error}
+						<div class="flex flex-1 items-center justify-center">
+							<div class="text-center">
+								<p class="text-sm text-destructive">{error}</p>
+								<Button variant="outline" class="mt-4" onclick={navigateToHome}>
+									Go to Home
+								</Button>
 							</div>
-						{/each}
+						</div>
+					{:else if loading}
+						<div class="flex flex-1 items-center justify-center">
+							<div class="text-sm text-muted-foreground">Loading...</div>
+						</div>
+					{:else}
+						<ScrollArea class="flex-1">
+							<ContextMenu.Root>
+								<ContextMenu.Trigger class="w-full h-full">
+									<div class="divide-y min-h-full">
+										{#each entries as entry (entry.name)}
+											<ContextMenu.Root>
+												<ContextMenu.Trigger>
+													<button
+														class="flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
+														onclick={() => navigateToEntry(entry)}
+														ondblclick={() =>
+															entry.is_dir &&
+															navigateToEntry(entry)}
+													>
+														{#if entry.is_dir}
+															<Folder
+																class="h-5 w-5 text-blue-500"
+															/>
+														{:else}
+															<File
+																class="h-5 w-5 text-muted-foreground"
+															/>
+														{/if}
+														<div class="flex-1 text-left">
+															<div class="text-sm font-medium">
+																{entry.name}
+															</div>
+															<div
+																class="text-xs text-muted-foreground"
+															>
+																{entry.permissions} · {entry.size}
+																· {entry.modified}
+															</div>
+														</div>
+													</button>
+												</ContextMenu.Trigger>
+												<ContextMenu.Content>
+													{#if entry.is_dir}
+														<ContextMenu.Item
+															onclick={() =>
+																navigateToEntry(entry)}
+															>Open</ContextMenu.Item
+														>
+														<ContextMenu.Separator />
+													{/if}
+													<ContextMenu.Item>Copy</ContextMenu.Item>
+													<ContextMenu.Item>Cut</ContextMenu.Item>
+													<ContextMenu.Item>Paste</ContextMenu.Item>
+													<ContextMenu.Separator />
+													<ContextMenu.Item>Rename</ContextMenu.Item>
+													<ContextMenu.Item
+														class="text-destructive"
+														onclick={() => openDeleteDialog(entry)}
+														>Delete</ContextMenu.Item
+													>
+												</ContextMenu.Content>
+											</ContextMenu.Root>
+										{/each}
+
+										<!-- Inline creating entry -->
+										{#if creatingType}
+											<div
+												class="flex w-full items-center gap-3 px-4 py-2 bg-accent/50"
+											>
+												{#if creatingType === "folder"}
+													<Folder class="h-5 w-5 text-blue-500" />
+												{:else}
+													<File
+														class="h-5 w-5 text-muted-foreground"
+													/>
+												{/if}
+												<Input
+													type="text"
+													bind:value={newItemName}
+													onkeydown={(e) => {
+														if (e.key === "Enter") {
+															e.preventDefault();
+															createItem();
+														} else if (e.key === "Escape") {
+															e.preventDefault();
+															cancelCreating();
+														}
+													}}
+													onblur={cancelCreating}
+													placeholder="Enter name..."
+												/>
+											</div>
+										{/if}
+
+										{#if entries.length === 0 && !creatingType}
+											<div class="flex h-96 items-center justify-center">
+												<p class="text-sm text-muted-foreground">
+													Empty directory
+												</p>
+											</div>
+										{/if}
+									</div>
+								</ContextMenu.Trigger>
+								<ContextMenu.Content>
+									<ContextMenu.Item onclick={() => startCreating("file")}>
+										Create File
+									</ContextMenu.Item>
+									<ContextMenu.Item onclick={() => startCreating("folder")}>
+										Create Folder
+									</ContextMenu.Item>
+									<ContextMenu.Separator />
+									<ContextMenu.Item onclick={createNewTerminal}>
+										<TerminalIcon class="h-4 w-4 mr-2" />
+										New Terminal Here
+									</ContextMenu.Item>
+								</ContextMenu.Content>
+							</ContextMenu.Root>
+						</ScrollArea>
+					{/if}
+				</div>
+			</Resizable.Pane>
+
+			<Resizable.Handle />
+
+			<!-- Terminal Pane -->
+			<Resizable.Pane defaultSize={30} minSize={20}>
+				{#if currentPathTerminals.length === 1}
+					<!-- Single terminal - full width -->
+					<div class="h-full">
+						{#if activeTerminal}
+							<Terminal terminal={activeTerminal} />
+						{/if}
+					</div>
+				{:else}
+					<!-- Multiple terminals - show selector on the right -->
+					<Resizable.PaneGroup direction="horizontal" class="h-full">
+						<!-- Active terminal -->
+						<Resizable.Pane defaultSize={80} minSize={50}>
+							<div class="h-full">
+								{#if activeTerminal}
+									<Terminal terminal={activeTerminal} />
+								{/if}
+							</div>
+						</Resizable.Pane>
+
+						<Resizable.Handle />
+
+						<!-- Terminal selector -->
+						<Resizable.Pane defaultSize={20} minSize={15} maxSize={40}>
+							<div class="h-full border-l bg-muted/30">
+								<div class="p-2 border-b bg-background">
+									<p class="text-xs font-medium text-muted-foreground">TERMINALS</p>
+								</div>
+								<ScrollArea class="h-[calc(100%-2.5rem)]">
+									<div class="p-2 space-y-1">
+										{#each currentPathTerminals as terminal (terminal.id)}
+											<ContextMenu.Root>
+												<ContextMenu.Trigger>
+													<button
+														class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors {activeTerminalId === terminal.id ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}"
+														onclick={() => activeTerminalId = terminal.id}
+													>
+														<div class="flex items-center gap-2">
+															<TerminalIcon class="h-4 w-4 shrink-0" />
+															<div class="flex-1 min-w-0">
+																<div class="font-medium truncate">
+																	{terminal.id.substring(0, 8)}...
+																</div>
+																<div class="text-xs text-muted-foreground truncate">
+																	{terminal.path}
+																</div>
+															</div>
+														</div>
+													</button>
+												</ContextMenu.Trigger>
+												<ContextMenu.Content>
+													<ContextMenu.Item
+														onclick={async () => {
+															await terminalManager.closeTerminal(terminal.id);
+															if (activeTerminalId === terminal.id) {
+																activeTerminalId = currentPathTerminals.find(t => t.id !== terminal.id)?.id || null;
+															}
+														}}
+													>
+														Close Terminal
+													</ContextMenu.Item>
+												</ContextMenu.Content>
+											</ContextMenu.Root>
+										{/each}
+									</div>
+								</ScrollArea>
+							</div>
+						</Resizable.Pane>
+					</Resizable.PaneGroup>
+				{/if}
+			</Resizable.Pane>
+		</Resizable.PaneGroup>
+	{:else}
+		<!-- No terminals - show file browser only -->
+		<div class="flex-1 flex flex-col min-h-0">
+			{#if error}
+				<div class="flex flex-1 items-center justify-center">
+					<div class="text-center">
+						<p class="text-sm text-destructive">{error}</p>
+						<Button variant="outline" class="mt-4" onclick={navigateToHome}>
+							Go to Home
+						</Button>
 					</div>
 				</div>
-			</div>
-		{/if}
-
-		<!-- File List -->
-		{#if error}
-			<div class="flex flex-1 items-center justify-center">
-				<div class="text-center">
-					<p class="text-sm text-destructive">{error}</p>
-					<Button variant="outline" class="mt-4" onclick={navigateToHome}>
-						Go to Home
-					</Button>
+			{:else if loading}
+				<div class="flex flex-1 items-center justify-center">
+					<div class="text-sm text-muted-foreground">Loading...</div>
 				</div>
-			</div>
-		{:else if loading}
-			<div class="flex flex-1 items-center justify-center">
-				<div class="text-sm text-muted-foreground">Loading...</div>
-			</div>
-		{:else}
-			<ScrollArea class="flex-1">
-				<ContextMenu.Root>
-					<ContextMenu.Trigger class="w-full h-full">
-						<div class="divide-y min-h-full">
-							{#each entries as entry (entry.name)}
-								<ContextMenu.Root>
-									<ContextMenu.Trigger>
-										<button
-											class="flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
-											onclick={() => navigateToEntry(entry)}
-											ondblclick={() =>
-												entry.is_dir &&
-												navigateToEntry(entry)}
-										>
-											{#if entry.is_dir}
-												<Folder
-													class="h-5 w-5 text-blue-500"
-												/>
-											{:else}
-												<File
-													class="h-5 w-5 text-muted-foreground"
-												/>
-											{/if}
-											<div class="flex-1 text-left">
-												<div class="text-sm font-medium">
-													{entry.name}
-												</div>
-												<div
-													class="text-xs text-muted-foreground"
-												>
-													{entry.permissions} · {entry.size}
-													· {entry.modified}
-												</div>
-											</div>
-										</button>
-									</ContextMenu.Trigger>
-									<ContextMenu.Content>
-										{#if entry.is_dir}
-											<ContextMenu.Item
-												onclick={() =>
+			{:else}
+				<ScrollArea class="flex-1">
+					<ContextMenu.Root>
+						<ContextMenu.Trigger class="w-full h-full">
+							<div class="divide-y min-h-full">
+								{#each entries as entry (entry.name)}
+									<ContextMenu.Root>
+										<ContextMenu.Trigger>
+											<button
+												class="flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
+												onclick={() => navigateToEntry(entry)}
+												ondblclick={() =>
+													entry.is_dir &&
 													navigateToEntry(entry)}
-												>Open</ContextMenu.Item
 											>
+												{#if entry.is_dir}
+													<Folder
+														class="h-5 w-5 text-blue-500"
+													/>
+												{:else}
+													<File
+														class="h-5 w-5 text-muted-foreground"
+													/>
+												{/if}
+												<div class="flex-1 text-left">
+													<div class="text-sm font-medium">
+														{entry.name}
+													</div>
+													<div
+														class="text-xs text-muted-foreground"
+													>
+														{entry.permissions} · {entry.size}
+														· {entry.modified}
+													</div>
+												</div>
+											</button>
+										</ContextMenu.Trigger>
+										<ContextMenu.Content>
+											{#if entry.is_dir}
+												<ContextMenu.Item
+													onclick={() =>
+														navigateToEntry(entry)}
+													>Open</ContextMenu.Item
+												>
+												<ContextMenu.Separator />
+											{/if}
+											<ContextMenu.Item>Copy</ContextMenu.Item>
+											<ContextMenu.Item>Cut</ContextMenu.Item>
+											<ContextMenu.Item>Paste</ContextMenu.Item>
 											<ContextMenu.Separator />
+											<ContextMenu.Item>Rename</ContextMenu.Item>
+											<ContextMenu.Item
+												class="text-destructive"
+												onclick={() => openDeleteDialog(entry)}
+												>Delete</ContextMenu.Item
+											>
+										</ContextMenu.Content>
+									</ContextMenu.Root>
+								{/each}
+
+								<!-- Inline creating entry -->
+								{#if creatingType}
+									<div
+										class="flex w-full items-center gap-3 px-4 py-2 bg-accent/50"
+									>
+										{#if creatingType === "folder"}
+											<Folder class="h-5 w-5 text-blue-500" />
+										{:else}
+											<File
+												class="h-5 w-5 text-muted-foreground"
+											/>
 										{/if}
-										<ContextMenu.Item>Copy</ContextMenu.Item>
-										<ContextMenu.Item>Cut</ContextMenu.Item>
-										<ContextMenu.Item>Paste</ContextMenu.Item>
-										<ContextMenu.Separator />
-										<ContextMenu.Item>Rename</ContextMenu.Item>
-										<ContextMenu.Item
-											class="text-destructive"
-											onclick={() => openDeleteDialog(entry)}
-											>Delete</ContextMenu.Item
-										>
-									</ContextMenu.Content>
-								</ContextMenu.Root>
-							{/each}
-
-							<!-- Inline creating entry -->
-							{#if creatingType}
-								<div
-									class="flex w-full items-center gap-3 px-4 py-2 bg-accent/50"
-								>
-									{#if creatingType === "folder"}
-										<Folder class="h-5 w-5 text-blue-500" />
-									{:else}
-										<File
-											class="h-5 w-5 text-muted-foreground"
+										<Input
+											type="text"
+											bind:value={newItemName}
+											onkeydown={(e) => {
+												if (e.key === "Enter") {
+													e.preventDefault();
+													createItem();
+												} else if (e.key === "Escape") {
+													e.preventDefault();
+													cancelCreating();
+												}
+											}}
+											onblur={cancelCreating}
+											placeholder="Enter name..."
 										/>
-									{/if}
-									<Input
-										type="text"
-										bind:value={newItemName}
-										onkeydown={(e) => {
-											if (e.key === "Enter") {
-												e.preventDefault();
-												createItem();
-											} else if (e.key === "Escape") {
-												e.preventDefault();
-												cancelCreating();
-											}
-										}}
-										onblur={cancelCreating}
-										placeholder="Enter name..."
-									/>
-								</div>
-							{/if}
+									</div>
+								{/if}
 
-							{#if entries.length === 0 && !creatingType}
-								<div class="flex h-96 items-center justify-center">
-									<p class="text-sm text-muted-foreground">
-										Empty directory
-									</p>
-								</div>
-							{/if}
-						</div>
-					</ContextMenu.Trigger>
-					<ContextMenu.Content>
-						<ContextMenu.Item onclick={() => startCreating("file")}>
-							Create File
-						</ContextMenu.Item>
-						<ContextMenu.Item onclick={() => startCreating("folder")}>
-							Create Folder
-						</ContextMenu.Item>
-						<ContextMenu.Separator />
-						<ContextMenu.Item onclick={createNewTerminal}>
-							<TerminalIcon class="h-4 w-4 mr-2" />
-							New Terminal Here
-						</ContextMenu.Item>
-					</ContextMenu.Content>
-				</ContextMenu.Root>
-			</ScrollArea>
-		{/if}
-	</div>
+								{#if entries.length === 0 && !creatingType}
+									<div class="flex h-96 items-center justify-center">
+										<p class="text-sm text-muted-foreground">
+											Empty directory
+										</p>
+									</div>
+								{/if}
+							</div>
+						</ContextMenu.Trigger>
+						<ContextMenu.Content>
+							<ContextMenu.Item onclick={() => startCreating("file")}>
+								Create File
+							</ContextMenu.Item>
+							<ContextMenu.Item onclick={() => startCreating("folder")}>
+								Create Folder
+							</ContextMenu.Item>
+							<ContextMenu.Separator />
+							<ContextMenu.Item onclick={createNewTerminal}>
+								<TerminalIcon class="h-4 w-4 mr-2" />
+								New Terminal Here
+							</ContextMenu.Item>
+						</ContextMenu.Content>
+					</ContextMenu.Root>
+				</ScrollArea>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Delete Confirmation Dialog -->
 	<ResponsiveDialog
