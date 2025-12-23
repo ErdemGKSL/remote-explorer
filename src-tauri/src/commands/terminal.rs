@@ -22,12 +22,7 @@ pub async fn create_terminal(
         project.public_key_file.as_deref(),
     )?;
 
-    // Extract user from host (e.g., "user@hostname") or default to "root"
-    let user = if project.host.contains('@') {
-        project.host.split('@').collect::<Vec<_>>()[0].to_string()
-    } else {
-        "root".to_string()
-    };
+    let user = project.user.clone();
 
     let client = connect_to_ssh(&host_port.hostname, host_port.port, &user, auth, 10).await?;
 

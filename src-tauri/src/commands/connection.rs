@@ -3,7 +3,7 @@ use tokio::sync::Mutex;
 use crate::auth::build_auth_method;
 use crate::models::{Project, ProjectInfo};
 use crate::ssh::{connect_to_ssh, parse_host_port};
-use crate::state::{PROJECTS, add_project, get_project_by_key, remove_project_by_key};
+use crate::state::{add_project, get_project_by_key, remove_project_by_key, PROJECTS};
 use std::sync::Arc;
 
 #[tauri::command]
@@ -74,6 +74,7 @@ pub async fn start_project(
     let project = Project {
         key: key.clone(),
         name: name.clone(),
+        user,
         host,
         password,
         key_file,
@@ -104,12 +105,29 @@ pub async fn start_project(
         ww.on_window_event(move |we| {
             match we {
                 tauri::WindowEvent::CloseRequested { .. } => {
-                    use crate::state::remove_project_by_key;
-                    let _ = remove_project_by_key(&key);
+                    let key_clone = key.clone();
+
+                    // Spawn async task to handle cleanup
+                    tokio::spawn(async move {
+                        if let Ok(project) = get_project_by_key(&key_clone) {
+                            // Disconnect terminal connections
+                            let mut terminal_conns = project.terminal_connections.lock().await;
+                            for conn in terminal_conns.drain(..) {
+                                let _ = conn.connection.disconnect();
+                            }
+                            drop(terminal_conns); // Release lock
+
+                            // Disconnect main connection
+                            let _ = project.main_connection.disconnect();
+                        }
+
+                        // Remove project from state
+                        let _ = remove_project_by_key(&key_clone);
+                    });
                 }
                 _ => {}
             }
-        }) ;
+        });
     }
 
     #[cfg(mobile)]
@@ -132,6 +150,7 @@ pub async fn start_project(
 pub fn get_project(key: String) -> Result<ProjectInfo, String> {
     get_project_by_key(&key).map(|project| ProjectInfo {
         key: project.key.clone(),
+        user: project.user.clone(),
         auth_method: project.auth_method.clone(),
         host: project.host.clone(),
         name: project.name.clone(),
@@ -167,6 +186,18 @@ pub async fn get_current_pwd(key: String) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn close_project(app: tauri::AppHandle, key: String) -> Result<(), String> {
+    if let Ok(project) = get_project_by_key(&key) {
+        // Disconnect terminal connections
+        let mut terminal_conns = project.terminal_connections.lock().await;
+        for conn in terminal_conns.drain(..) {
+            let _ = conn.connection.disconnect();
+        }
+        drop(terminal_conns); // Release lock
+
+        // Disconnect main connection
+        let _ = project.main_connection.disconnect();
+    }
+
     // Remove the project from the global state
     let _ = remove_project_by_key(&key);
 
