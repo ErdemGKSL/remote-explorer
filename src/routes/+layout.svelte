@@ -20,7 +20,11 @@
 	}
 
 	async function maximize() {
-		await appWindow.maximize();
+		if (await appWindow.isMaximized()) {
+			return await appWindow.unmaximize();
+		} else {
+			await appWindow.maximize();
+		}
 	}
 
 	async function closeWindow() {

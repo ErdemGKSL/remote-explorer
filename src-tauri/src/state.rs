@@ -26,3 +26,12 @@ pub fn add_project(project: Project) -> Result<(), String> {
         .push(project);
     Ok(())
 }
+
+pub fn remove_project_by_key(key: &str) -> Result<(), String> {
+    let mut projects = PROJECTS
+        .lock()
+        .map_err(|e| format!("Failed to lock projects: {}", e))?;
+
+    projects.retain(|project| project.key != key);
+    Ok(())
+}

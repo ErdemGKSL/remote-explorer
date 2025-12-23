@@ -1,7 +1,7 @@
 use crate::auth::build_auth_method;
 use crate::models::{Project, ProjectInfo};
 use crate::ssh::{connect_to_ssh, parse_host_port};
-use crate::state::{add_project, get_project_by_key, PROJECTS};
+use crate::state::{PROJECTS, add_project, get_project_by_key, remove_project_by_key};
 use std::sync::Arc;
 
 #[tauri::command]
@@ -92,12 +92,22 @@ pub async fn start_project(
         let window_label = format!("remote-{}", key);
         let url = format!("/remote?key={}", key);
 
-        let _ = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
+        let ww = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
             .inner_size(1200.0, 800.0)
             .title(&format!("{} - Remote Explorer", name))
             .decorations(false)
             .build()
             .map_err(|e| format!("Failed to create window: {}", e))?;
+
+        ww.on_window_event(move |we| {
+            match we {
+                tauri::WindowEvent::CloseRequested { .. } => {
+                    use crate::state::remove_project_by_key;
+                    let _ = remove_project_by_key(&key);
+                }
+                _ => {}
+            }
+        }) ;
     }
 
     #[cfg(mobile)]
@@ -156,16 +166,7 @@ pub async fn get_current_pwd(key: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn close_project(app: tauri::AppHandle, key: String) -> Result<(), String> {
     // Remove the project from the global state
-    {
-        let mut projects = PROJECTS
-            .lock()
-            .map_err(|e| format!("Failed to lock projects: {}", e))?;
-        let initial_len = projects.len();
-        projects.retain(|p| p.key != key);
-        if projects.len() == initial_len {
-            return Err("Project not found".to_string());
-        }
-    }
+    let _ = remove_project_by_key(&key);
 
     // Handle platform-specific closing
     #[cfg(desktop)]
