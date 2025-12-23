@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface Terminal {
 	id: string;
-	name: string;
 	path: string;
 	history: TerminalLine[];
 	currentCommand: string;
@@ -34,7 +33,7 @@ class TerminalManager {
 		return this.terminals.get(id);
 	}
 
-	async createTerminal(name: string, path: string): Promise<string> {
+	async createTerminal(path: string): Promise<string> {
 		try {
 			const id = await invoke<string>("create_terminal", {
 				key: this.projectKey,
@@ -44,7 +43,6 @@ class TerminalManager {
 
 			const terminal: Terminal = {
 				id,
-				name,
 				path,
 				history: [
 					{
@@ -143,7 +141,6 @@ class TerminalManager {
 				if (!this.terminals.has(id)) {
 					this.terminals.set(id, {
 						id,
-						name,
 						path,
 						history: [
 							{

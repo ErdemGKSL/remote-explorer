@@ -46,8 +46,6 @@
 	let showDeleteDialog = $state(false);
 	let selectedEntry = $state<DirEntry | null>(null);
 	let isMobile = $state(false);
-	let showNewTerminalDialog = $state(false);
-	let newTerminalName = $state("");
 	const appWindow = getCurrentWindow();
 
 	// Get terminals for current path
@@ -223,18 +221,9 @@
 		}
 	}
 
-	function openNewTerminalDialog() {
-		newTerminalName = `Terminal ${currentPathTerminals.length + 1}`;
-		showNewTerminalDialog = true;
-	}
-
 	async function createNewTerminal() {
-		if (!newTerminalName.trim()) return;
-
 		try {
-			await terminalManager.createTerminal(newTerminalName, currentPath);
-			showNewTerminalDialog = false;
-			newTerminalName = "";
+			await terminalManager.createTerminal(currentPath);
 		} catch (e) {
 			error = String(e);
 		}
@@ -303,6 +292,18 @@
 			disabled={loading}
 		>
 			<House class="h-5 w-5" />
+		</Button>
+		<Separator orientation="vertical" class="h-6" />
+		<Button
+			variant="default"
+			size="sm"
+			onclick={createNewTerminal}
+			title="New Terminal"
+			class="gap-1"
+		>
+			<Plus class="h-4 w-4" />
+			<TerminalIcon class="h-4 w-4" />
+			<span class="hidden sm:inline">Terminal</span>
 		</Button>
 		<Separator orientation="vertical" class="h-6" />
 		<ContextMenu.Root>
@@ -380,9 +381,6 @@
 				</ContextMenu.Item>
 			</ContextMenu.Content>
 		</ContextMenu.Root>
-		<Button variant="ghost" size="icon" onclick={openNewTerminalDialog}>
-			<TerminalIcon class="h-5 w-5" />
-		</Button>
 		<Button variant="ghost" size="icon" onclick={closeConnection}>
 			<Unplug class="h-5 w-5" />
 		</Button>
@@ -526,7 +524,7 @@
 							Create Folder
 						</ContextMenu.Item>
 						<ContextMenu.Separator />
-						<ContextMenu.Item onclick={openNewTerminalDialog}>
+						<ContextMenu.Item onclick={createNewTerminal}>
 							<TerminalIcon class="h-4 w-4 mr-2" />
 							New Terminal Here
 						</ContextMenu.Item>
@@ -560,46 +558,6 @@
 			>
 			<Button variant="destructive" onclick={confirmDelete}>Delete</Button
 			>
-		{/snippet}
-	</ResponsiveDialog>
-
-	<!-- New Terminal Dialog -->
-	<ResponsiveDialog
-		bind:open={showNewTerminalDialog}
-		title="New Terminal"
-	>
-		{#snippet trigger()}
-			<!-- svelte-ignore element_invalid_self_closing_tag -->
-			<span class="hidden" />
-		{/snippet}
-		{#snippet children()}
-			<div class="space-y-4">
-				<div>
-					<label for="terminal-name" class="text-sm font-medium">
-						Terminal Name
-					</label>
-					<Input
-						id="terminal-name"
-						bind:value={newTerminalName}
-						placeholder="Enter terminal name..."
-						onkeydown={(e) => {
-							if (e.key === "Enter") {
-								e.preventDefault();
-								createNewTerminal();
-							}
-						}}
-					/>
-				</div>
-				<div class="text-sm text-muted-foreground">
-					Path: {currentPath}
-				</div>
-			</div>
-		{/snippet}
-		{#snippet footer()}
-			<Button variant="outline" onclick={() => (showNewTerminalDialog = false)}
-				>Cancel</Button
-			>
-			<Button onclick={createNewTerminal}>Create</Button>
 		{/snippet}
 	</ResponsiveDialog>
 </div>

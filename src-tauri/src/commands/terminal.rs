@@ -8,7 +8,6 @@ use uuid::Uuid;
 #[tauri::command]
 pub async fn create_terminal(
     key: String,
-    name: String,
     path: String,
 ) -> Result<String, String> {
     let project = get_project_by_key(&key)?;
@@ -45,7 +44,6 @@ pub async fn create_terminal(
     let terminal_connection = TerminalConnection {
         id: terminal_id.clone(),
         connection: Arc::new(client),
-        name,
         path,
     };
 
@@ -113,7 +111,7 @@ pub async fn close_terminal(key: String, terminal_id: String) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub async fn list_terminals(key: String) -> Result<Vec<(String, String, String)>, String> {
+pub async fn list_terminals(key: String) -> Result<Vec<(String, String)>, String> {
     let project = get_project_by_key(&key)?;
 
     let terminals = project
@@ -121,9 +119,9 @@ pub async fn list_terminals(key: String) -> Result<Vec<(String, String, String)>
         .lock()
         .await;
 
-    let result: Vec<(String, String, String)> = terminals
+    let result: Vec<(String, String)> = terminals
         .iter()
-        .map(|t| (t.id.clone(), t.name.clone(), t.path.clone()))
+        .map(|t| (t.id.clone(), t.path.clone()))
         .collect();
 
     Ok(result)

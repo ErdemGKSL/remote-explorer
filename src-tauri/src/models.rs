@@ -8,7 +8,6 @@ use std::sync::Arc;
 pub struct TerminalConnection {
     pub id: String,
     pub connection: Arc<Client>,
-    pub name: String,
     pub path: String, // this is a start path, if user changes it by cd command, this path is not updated
 }
 

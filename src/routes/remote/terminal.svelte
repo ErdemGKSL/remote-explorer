@@ -56,7 +56,7 @@
 	<Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2 px-4 py-2 border-b">
 		<div class="flex items-center gap-2">
 			<TerminalIcon class="h-4 w-4 text-muted-foreground" />
-			<Card.Title class="text-sm font-medium">{terminal.name}</Card.Title>
+			<Card.Title class="text-sm font-medium">{terminal.id}</Card.Title>
 			<span class="text-xs text-muted-foreground">({terminal.path})</span>
 		</div>
 		<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleClose}>
