@@ -288,8 +288,6 @@ jobs:
 
             ## Included Artifacts
             All platform installers produced by the Tauri build matrix are attached.
-
-            **Note:** This is a development release. Use stable releases for production.
           files: release/*
           draft: false
           prerelease: false
