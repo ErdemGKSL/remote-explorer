@@ -183,7 +183,6 @@ jobs:
           echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
           echo "Found: $DEB_FILE"
 
-
           # Install required tools
           sudo apt-get update
           sudo apt-get install -y libarchive-tools
@@ -216,19 +215,24 @@ jobs:
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
           sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
           
-          # Build in Docker to avoid dependency issues
-          docker run --rm -v "$PWD:/pkg" archlinux:latest bash -c "
+          # Create output directory with proper permissions
+          mkdir -p ../release-arch
+          
+          # Build in Docker with proper UID mapping
+          docker run --rm \
+            -v "$PWD:/pkg" \
+            -v "$PWD/../release-arch:/output" \
+            archlinux:latest bash -c "
             set -e
             pacman -Sy --noconfirm base-devel libarchive
             useradd -m builder
             chown -R builder:builder /pkg
             cd /pkg
             su builder -c 'makepkg --nodeps --skippgpcheck'
+            # Copy as root to ensure permissions
+            cp *.pkg.tar.zst /output/
+            chmod 644 /output/*.pkg.tar.zst
           "
-          
-          # Move the package to release directory
-          mkdir -p ../release-arch
-          mv *.pkg.tar.zst ../release-arch/
 
       - name: upload arch package
         uses: actions/upload-artifact@v4
