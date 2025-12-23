@@ -54,7 +54,7 @@
 </script>
 
 <Toaster />
-<div class="flex h-screen flex-col pt-8 md:pt-0 pb-2 md:pb-0">
+<div class="flex h-screen flex-col {isMobile ? 'pt-8 pb-2' : ''}">
 	{#if showButtons}
 		<div 
 			class="flex items-center justify-between bg-background border-b px-4 py-2 select-none h-12"

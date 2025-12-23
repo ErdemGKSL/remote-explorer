@@ -89,12 +89,15 @@ pub async fn start_project(
     // Create a new window for the project (desktop) or navigate in current window (mobile)
     #[cfg(desktop)]
     {
+        use tauri::Manager;
         use tauri::WebviewUrl;
         use tauri::WebviewWindowBuilder;
 
         let window_label = format!("remote-{}", key);
         let url = format!("/remote?key={}", key);
-
+        
+        let _ = app.add_capability(include_str!("../../capabilities/default.json"));
+        
         let ww = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
             .inner_size(1200.0, 800.0)
             .title(&format!("{} - Remote Explorer", name))
@@ -102,13 +105,14 @@ pub async fn start_project(
             .build()
             .map_err(|e| format!("Failed to create window: {}", e))?;
 
+
         ww.on_window_event(move |we| {
             match we {
                 tauri::WindowEvent::CloseRequested { .. } => {
                     let key_clone = key.clone();
 
                     // Spawn async task to handle cleanup
-                    tokio::spawn(async move {
+                    tauri::async_runtime::spawn(async move {
                         if let Ok(project) = get_project_by_key(&key_clone) {
                             // Disconnect terminal connections
                             let mut terminal_conns = project.terminal_connections.lock().await;
