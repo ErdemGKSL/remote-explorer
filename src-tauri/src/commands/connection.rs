@@ -95,7 +95,9 @@ pub async fn start_project(
 
         let window_label = format!("remote-{}", key);
         let url = format!("/remote?key={}", key);
-
+        
+        let _ = app.add_capability(include_str!("../../capabilities/default.json"));
+        
         let ww = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
             .inner_size(1200.0, 800.0)
             .title(&format!("{} - Remote Explorer", name))
@@ -103,7 +105,6 @@ pub async fn start_project(
             .build()
             .map_err(|e| format!("Failed to create window: {}", e))?;
 
-        let _ = app.add_capability(include_str!("../../capabilities/default.json"));
 
         ww.on_window_event(move |we| {
             match we {

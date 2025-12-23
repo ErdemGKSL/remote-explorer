@@ -294,17 +294,7 @@
 			<House class="h-5 w-5" />
 		</Button>
 		<Separator orientation="vertical" class="h-6" />
-		<Button
-			variant="default"
-			size="sm"
-			onclick={createNewTerminal}
-			title="New Terminal"
-			class="gap-1"
-		>
-			<Plus class="h-4 w-4" />
-			<TerminalIcon class="h-4 w-4" />
-			<span class="hidden sm:inline">Terminal</span>
-		</Button>
+		
 		<Separator orientation="vertical" class="h-6" />
 		<ContextMenu.Root>
 			<ContextMenu.Trigger class="flex-1">
@@ -339,9 +329,9 @@
 										.split("/")
 										.filter((p) => p)}
 									{#each parts as part, i}
-										<Breadcrumb.Separator />
+										<Breadcrumb.Separator class={parts.length - 2 > i ? 'hidden md:block' : ''} />
 										<Breadcrumb.Item
-											class="text-muted-foreground hover:text-foreground px-1 transition-colors select-none {i === parts.length - 1 ? 'cursor-default' : 'cursor-pointer'}"
+											class="text-muted-foreground hover:text-foreground px-1 transition-colors select-none {parts.length - 2 > i ? 'md:block hidden' : ''} {i === parts.length - 1 ? 'cursor-default' : 'cursor-pointer'}"
 											onclick={(e) => {
 												if (i === parts.length - 1)
 													return;
@@ -381,6 +371,18 @@
 				</ContextMenu.Item>
 			</ContextMenu.Content>
 		</ContextMenu.Root>
+		<Button
+			variant="default"
+			size="sm"
+			onclick={() => {
+				// createNewTerminal();
+			}}
+			title="New Terminal"
+			class="gap-1 opacity-30 disabled cursor-not-allowed"
+		>
+			<Plus class="h-4 w-4" />
+			<TerminalIcon class="h-4 w-4" />
+		</Button>
 		<Button variant="ghost" size="icon" onclick={closeConnection}>
 			<Unplug class="h-5 w-5" />
 		</Button>
