@@ -26,6 +26,9 @@
 	import Terminal from "./terminal.svelte";
 	import { terminalManager } from "./terminal-store.svelte";
 
+	let currentPlatform = platform();
+	let isMobileBuild = currentPlatform === 'android' || currentPlatform === 'ios';
+
 	interface DirEntry {
 		name: string;
 		is_dir: boolean;
@@ -294,8 +297,6 @@
 			<House class="h-5 w-5" />
 		</Button>
 		<Separator orientation="vertical" class="h-6" />
-		
-		<Separator orientation="vertical" class="h-6" />
 		<ContextMenu.Root>
 			<ContextMenu.Trigger class="flex-1">
 				<div class="flex-1">
@@ -383,9 +384,11 @@
 			<Plus class="h-4 w-4" />
 			<TerminalIcon class="h-4 w-4" />
 		</Button>
-		<Button variant="ghost" size="icon" onclick={closeConnection}>
-			<Unplug class="h-5 w-5" />
-		</Button>
+		{#if isMobileBuild}
+			<Button variant="ghost" size="icon" onclick={closeConnection}>
+				<Unplug class="h-5 w-5" />
+			</Button>
+		{/if}
 	</div>
 
 	<!-- Main Content Area -->
