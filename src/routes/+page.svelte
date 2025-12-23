@@ -160,11 +160,16 @@
   }
   
   $effect(() => {
+    open;
+    resetForm();
+  });
+
+  async function resetForm() {
     if (open && !loading) {
       name = host = user = password = keyFile = publicKeyFile = "";
       authMethod = "password";
     }
-  });
+  }
 
   async function connect(project: {
     name: string;

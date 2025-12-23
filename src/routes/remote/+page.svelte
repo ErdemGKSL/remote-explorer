@@ -10,6 +10,8 @@
 		House,
 		RefreshCw,
 		Unplug,
+		Terminal as TerminalIcon,
+		Plus,
 	} from "@lucide/svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { Separator } from "$lib/components/ui/separator";
@@ -18,10 +20,11 @@
 	import * as Breadcrumb from "$lib/components/ui/breadcrumb";
 	import { loadConnection } from "./connection.svelte";
 	import Input from "$lib/components/ui/input/input.svelte";
-	import * as Dialog from "$lib/components/ui/dialog";
 	import ResponsiveDialog from "$lib/components/ui/responsive-dialog/responsive-dialog.svelte";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { platform } from "@tauri-apps/plugin-os";
+	import Terminal from "./terminal.svelte";
+	import { terminalManager } from "./terminal-store.svelte";
 
 	interface DirEntry {
 		name: string;
@@ -44,6 +47,13 @@
 	let selectedEntry = $state<DirEntry | null>(null);
 	let isMobile = $state(false);
 	const appWindow = getCurrentWindow();
+
+	// Get terminals for current path
+	let currentPathTerminals = $derived(
+		terminalManager.terminals.values().filter(
+			(t) => t.path === currentPath
+		).toArray()
+	);
 
 	async function loadDirectory(path: string) {
 		loading = entries.length === 0;
@@ -168,6 +178,7 @@
 		creatingType = null;
 		newItemName = "";
 	}
+
 	function openDeleteDialog(entry: DirEntry) {
 		selectedEntry = entry;
 		showDeleteDialog = true;
@@ -176,7 +187,7 @@
 	async function confirmDelete() {
 		let entry = selectedEntry;
 		showDeleteDialog = false;
-		await new Promise((r) => setTimeout(r, 150)); // wait for dialog close animation
+		await new Promise((r) => setTimeout(r, 150));
 		selectedEntry = null;
 		if (entry) {
 			await deleteItem(entry);
@@ -210,16 +221,12 @@
 		}
 	}
 
-	async function minimize() {
-		await appWindow.minimize();
-	}
-
-	async function maximize() {
-		await appWindow.maximize();
-	}
-
-	async function closeWindow() {
-		await appWindow.close();
+	async function createNewTerminal() {
+		try {
+			await terminalManager.createTerminal(currentPath);
+		} catch (e) {
+			error = String(e);
+		}
 	}
 
 	onMount(() => {
@@ -227,8 +234,14 @@
 
 		(async () => {
 			try {
+				// Set project key for terminal manager
+				terminalManager.setProjectKey(projectKey);
+
 				// Load connection info first
 				await loadConnection(projectKey);
+
+				// Load existing terminals
+				await terminalManager.loadTerminals();
 
 				// Then load directory
 				const pwd = await invoke<string>("get_current_pwd", {
@@ -240,12 +253,9 @@
 			}
 		})();
 
-		let interv = setInterval(async () => {
-			console.log(pathInputFocused);
-		}, 1000);
-
 		return () => {
-			clearInterval(interv);
+			// Cleanup terminals when leaving
+			terminalManager.clearAll();
 		};
 	});
 </script>
@@ -282,6 +292,18 @@
 			disabled={loading}
 		>
 			<House class="h-5 w-5" />
+		</Button>
+		<Separator orientation="vertical" class="h-6" />
+		<Button
+			variant="default"
+			size="sm"
+			onclick={createNewTerminal}
+			title="New Terminal"
+			class="gap-1"
+		>
+			<Plus class="h-4 w-4" />
+			<TerminalIcon class="h-4 w-4" />
+			<span class="hidden sm:inline">Terminal</span>
 		</Button>
 		<Separator orientation="vertical" class="h-6" />
 		<ContextMenu.Root>
@@ -364,130 +386,153 @@
 		</Button>
 	</div>
 
-	<!-- File List -->
-	{#if error}
-		<div class="flex flex-1 items-center justify-center">
-			<div class="text-center">
-				<p class="text-sm text-destructive">{error}</p>
-				<Button variant="outline" class="mt-4" onclick={navigateToHome}>
-					Go to Home
-				</Button>
-			</div>
-		</div>
-	{:else if loading}
-		<div class="flex flex-1 items-center justify-center">
-			<div class="text-sm text-muted-foreground">Loading...</div>
-		</div>
-	{:else}
-		<ScrollArea class="flex-1 h-[calc(100vh-3rem)]">
-			<ContextMenu.Root>
-				<ContextMenu.Trigger class="w-full h-full">
-					<div class="divide-y min-h-full">
-						{#each entries as entry (entry.name)}
-							<ContextMenu.Root>
-								<ContextMenu.Trigger>
-									<button
-										class="flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
-										onclick={() => navigateToEntry(entry)}
-										ondblclick={() =>
-											entry.is_dir &&
-											navigateToEntry(entry)}
-									>
-										{#if entry.is_dir}
-											<Folder
-												class="h-5 w-5 text-blue-500"
-											/>
-										{:else}
-											<File
-												class="h-5 w-5 text-muted-foreground"
-											/>
-										{/if}
-										<div class="flex-1 text-left">
-											<div class="text-sm font-medium">
-												{entry.name}
-											</div>
-											<div
-												class="text-xs text-muted-foreground"
-											>
-												{entry.permissions} · {entry.size}
-												· {entry.modified}
-											</div>
-										</div>
-									</button>
-								</ContextMenu.Trigger>
-								<ContextMenu.Content>
-									{#if entry.is_dir}
-										<ContextMenu.Item
-											onclick={() =>
-												navigateToEntry(entry)}
-											>Open</ContextMenu.Item
-										>
-										<ContextMenu.Separator />
-									{/if}
-									<ContextMenu.Item>Copy</ContextMenu.Item>
-									<ContextMenu.Item>Cut</ContextMenu.Item>
-									<ContextMenu.Item>Paste</ContextMenu.Item>
-									<ContextMenu.Separator />
-									<ContextMenu.Item>Rename</ContextMenu.Item>
-									<ContextMenu.Item
-										class="text-destructive"
-										onclick={() => openDeleteDialog(entry)}
-										>Delete</ContextMenu.Item
-									>
-								</ContextMenu.Content>
-							</ContextMenu.Root>
+	<!-- Main Content Area -->
+	<div class="flex-1 flex flex-col min-h-0">
+		<!-- Terminals Section -->
+		{#if currentPathTerminals.length > 0}
+			<div class="border-b">
+				<div class="p-2 space-y-2 max-h-96 overflow-y-auto">
+					<div class="grid gap-2 {currentPathTerminals.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}">
+						{#each currentPathTerminals as terminal (terminal.id)}
+							<div class="h-64">
+								<Terminal {terminal} />
+							</div>
 						{/each}
-
-						<!-- Inline creating entry -->
-						{#if creatingType}
-							<div
-								class="flex w-full items-center gap-3 px-4 py-2 bg-accent/50"
-							>
-								{#if creatingType === "folder"}
-									<Folder class="h-5 w-5 text-blue-500" />
-								{:else}
-									<File
-										class="h-5 w-5 text-muted-foreground"
-									/>
-								{/if}
-								<Input
-									type="text"
-									bind:value={newItemName}
-									onkeydown={(e) => {
-										if (e.key === "Enter") {
-											e.preventDefault();
-											createItem();
-										} else if (e.key === "Escape") {
-											e.preventDefault();
-											cancelCreating();
-										}
-									}}
-									onblur={cancelCreating}
-									placeholder="Enter name..."
-								/>
-							</div>
-						{/if}
-
-						{#if entries.length === 0 && !creatingType}
-							<div class="flex h-96 items-center justify-center">
-								<p class="text-sm text-muted-foreground">
-									Empty directory
-								</p>
-							</div>
-						{/if}
 					</div>
-				</ContextMenu.Trigger>
-				<ContextMenu.Content>
-					<ContextMenu.Item onclick={() => startCreating("file")}>
-						Create File
-					</ContextMenu.Item>
-					<ContextMenu.Item onclick={() => startCreating("folder")}>
-						Create Folder
-					</ContextMenu.Item>
-				</ContextMenu.Content>
-			</ContextMenu.Root>
-		</ScrollArea>
-	{/if}
+				</div>
+			</div>
+		{/if}
+
+		<!-- File List -->
+		{#if error}
+			<div class="flex flex-1 items-center justify-center">
+				<div class="text-center">
+					<p class="text-sm text-destructive">{error}</p>
+					<Button variant="outline" class="mt-4" onclick={navigateToHome}>
+						Go to Home
+					</Button>
+				</div>
+			</div>
+		{:else if loading}
+			<div class="flex flex-1 items-center justify-center">
+				<div class="text-sm text-muted-foreground">Loading...</div>
+			</div>
+		{:else}
+			<ScrollArea class="flex-1">
+				<ContextMenu.Root>
+					<ContextMenu.Trigger class="w-full h-full">
+						<div class="divide-y min-h-full">
+							{#each entries as entry (entry.name)}
+								<ContextMenu.Root>
+									<ContextMenu.Trigger>
+										<button
+											class="flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
+											onclick={() => navigateToEntry(entry)}
+											ondblclick={() =>
+												entry.is_dir &&
+												navigateToEntry(entry)}
+										>
+											{#if entry.is_dir}
+												<Folder
+													class="h-5 w-5 text-blue-500"
+												/>
+											{:else}
+												<File
+													class="h-5 w-5 text-muted-foreground"
+												/>
+											{/if}
+											<div class="flex-1 text-left">
+												<div class="text-sm font-medium">
+													{entry.name}
+												</div>
+												<div
+													class="text-xs text-muted-foreground"
+												>
+													{entry.permissions} · {entry.size}
+													· {entry.modified}
+												</div>
+											</div>
+										</button>
+									</ContextMenu.Trigger>
+									<ContextMenu.Content>
+										{#if entry.is_dir}
+											<ContextMenu.Item
+												onclick={() =>
+													navigateToEntry(entry)}
+												>Open</ContextMenu.Item
+											>
+											<ContextMenu.Separator />
+										{/if}
+										<ContextMenu.Item>Copy</ContextMenu.Item>
+										<ContextMenu.Item>Cut</ContextMenu.Item>
+										<ContextMenu.Item>Paste</ContextMenu.Item>
+										<ContextMenu.Separator />
+										<ContextMenu.Item>Rename</ContextMenu.Item>
+										<ContextMenu.Item
+											class="text-destructive"
+											onclick={() => openDeleteDialog(entry)}
+											>Delete</ContextMenu.Item
+										>
+									</ContextMenu.Content>
+								</ContextMenu.Root>
+							{/each}
+
+							<!-- Inline creating entry -->
+							{#if creatingType}
+								<div
+									class="flex w-full items-center gap-3 px-4 py-2 bg-accent/50"
+								>
+									{#if creatingType === "folder"}
+										<Folder class="h-5 w-5 text-blue-500" />
+									{:else}
+										<File
+											class="h-5 w-5 text-muted-foreground"
+										/>
+									{/if}
+									<Input
+										type="text"
+										bind:value={newItemName}
+										onkeydown={(e) => {
+											if (e.key === "Enter") {
+												e.preventDefault();
+												createItem();
+											} else if (e.key === "Escape") {
+												e.preventDefault();
+												cancelCreating();
+											}
+										}}
+										onblur={cancelCreating}
+										placeholder="Enter name..."
+									/>
+								</div>
+							{/if}
+
+							{#if entries.length === 0 && !creatingType}
+								<div class="flex h-96 items-center justify-center">
+									<p class="text-sm text-muted-foreground">
+										Empty directory
+									</p>
+								</div>
+							{/if}
+						</div>
+					</ContextMenu.Trigger>
+					<ContextMenu.Content>
+						<ContextMenu.Item onclick={() => startCreating("file")}>
+							Create File
+						</ContextMenu.Item>
+						<ContextMenu.Item onclick={() => startCreating("folder")}>
+							Create Folder
+						</ContextMenu.Item>
+						<ContextMenu.Separator />
+						<ContextMenu.Item onclick={createNewTerminal}>
+							<TerminalIcon class="h-4 w-4 mr-2" />
+							New Terminal Here
+						</ContextMenu.Item>
+					</ContextMenu.Content>
+				</ContextMenu.Root>
+			</ScrollArea>
+		{/if}
+	</div>
 
 	<!-- Delete Confirmation Dialog -->
 	<ResponsiveDialog
