@@ -1,29 +1,28 @@
 use crate::models::Project;
 use lazy_static::lazy_static;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 lazy_static! {
-    pub static ref PROJECTS: Mutex<Vec<Project>> = Mutex::new(Vec::new());
+    pub static ref PROJECTS: Mutex<Vec<Arc<Project>>> = Mutex::new(Vec::new());
 }
 
-pub fn get_project_by_key(key: &str) -> Result<std::sync::Arc<crate::models::Project>, String> {
+pub fn get_project_by_key(key: &str) -> Result<Arc<Project>, String> {
     let projects = PROJECTS
         .lock()
         .map_err(|e| format!("Failed to lock projects: {}", e))?;
 
-    for project in projects.iter() {
-        if project.key == key {
-            return Ok(std::sync::Arc::new(project.clone()));
-        }
-    }
-    Err("Project not found".to_string())
+    projects
+        .iter()
+        .find(|p| p.key == key)
+        .cloned()
+        .ok_or_else(|| "Project not found".to_string())
 }
 
 pub fn add_project(project: Project) -> Result<(), String> {
     PROJECTS
         .lock()
         .map_err(|e| format!("Failed to lock projects: {}", e))?
-        .push(project);
+        .push(Arc::new(project));
     Ok(())
 }
 

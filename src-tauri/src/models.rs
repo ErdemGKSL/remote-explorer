@@ -1,5 +1,6 @@
 use async_ssh2_tokio::client::Client;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -22,7 +23,7 @@ pub struct Project {
     pub public_key_file: Option<String>,
     pub auth_method: String,
     pub main_connection: Arc<Client>,
-    pub terminal_connections: Vec<Arc<TerminalConnection>>,
+    pub terminal_connections: Arc<Mutex<Vec<TerminalConnection>>>,
 }
 
 #[derive(Serialize)]

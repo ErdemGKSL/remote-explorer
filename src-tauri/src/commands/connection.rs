@@ -1,3 +1,5 @@
+use tokio::sync::Mutex;
+
 use crate::auth::build_auth_method;
 use crate::models::{Project, ProjectInfo};
 use crate::ssh::{connect_to_ssh, parse_host_port};
@@ -78,7 +80,7 @@ pub async fn start_project(
         public_key_file,
         auth_method,
         main_connection: Arc::new(client),
-        terminal_connections: vec![],
+        terminal_connections: Arc::new(Mutex::new(Vec::new())),
     };
 
     add_project(project)?;
