@@ -11,6 +11,12 @@
     "store:default",
     "os:default",
     "clipboard-manager:default",
-    "shell:default"
+    "shell:default",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    "os:allow-platform"
   ]
 }
