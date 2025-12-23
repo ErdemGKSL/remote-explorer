@@ -89,6 +89,7 @@ pub async fn start_project(
     // Create a new window for the project (desktop) or navigate in current window (mobile)
     #[cfg(desktop)]
     {
+        use tauri::Manager;
         use tauri::WebviewUrl;
         use tauri::WebviewWindowBuilder;
 
@@ -102,13 +103,15 @@ pub async fn start_project(
             .build()
             .map_err(|e| format!("Failed to create window: {}", e))?;
 
+        let _ = app.add_capability(include_str!("../../capabilities/default.json"));
+
         ww.on_window_event(move |we| {
             match we {
                 tauri::WindowEvent::CloseRequested { .. } => {
                     let key_clone = key.clone();
 
                     // Spawn async task to handle cleanup
-                    tokio::spawn(async move {
+                    tauri::async_runtime::spawn(async move {
                         if let Ok(project) = get_project_by_key(&key_clone) {
                             // Disconnect terminal connections
                             let mut terminal_conns = project.terminal_connections.lock().await;

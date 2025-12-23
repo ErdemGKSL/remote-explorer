@@ -51,7 +51,7 @@ pub async fn create_terminal(
     let content_lines = Arc::clone(&terminal_connection.content_lines);
     let current_executions = Arc::clone(&terminal_connection.current_executions);
 
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let (stdout_tx, mut stdout_rx) = mpsc::channel::<Vec<u8>>(100);
         let (stdin_tx, stdin_rx) = mpsc::channel::<Vec<u8>>(100);
 
@@ -68,7 +68,7 @@ pub async fn create_terminal(
         let current_executions_clone = Arc::clone(&current_executions);
 
         // Spawn task to collect stdout
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             while let Some(data) = stdout_rx.recv().await {
                 let text = String::from_utf8_lossy(&data).to_string();
                 let mut lines = content_lines_clone.lock().await;
