@@ -24,6 +24,7 @@ pub struct TerminalExecution {
 pub struct Project {
     pub key: String,
     pub name: String,
+    pub user: String,
     pub host: String,
     pub password: Option<String>,
     pub key_file: Option<String>,
@@ -37,6 +38,7 @@ pub struct Project {
 pub struct ProjectInfo {
     pub key: String,
     pub name: String,
+    pub user: String,
     pub host: String,
     pub auth_method: String,
 }

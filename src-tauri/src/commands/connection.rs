@@ -74,6 +74,7 @@ pub async fn start_project(
     let project = Project {
         key: key.clone(),
         name: name.clone(),
+        user,
         host,
         password,
         key_file,
@@ -149,6 +150,7 @@ pub async fn start_project(
 pub fn get_project(key: String) -> Result<ProjectInfo, String> {
     get_project_by_key(&key).map(|project| ProjectInfo {
         key: project.key.clone(),
+        user: project.user.clone(),
         auth_method: project.auth_method.clone(),
         host: project.host.clone(),
         name: project.name.clone(),

@@ -6,7 +6,6 @@ pub struct HostPort {
     pub hostname: String,
     pub port: u16,
 }
-
 pub fn parse_host_port(host: &str) -> HostPort {
     if host.contains(':') {
         let parts: Vec<&str> = host.splitn(2, ':').collect();
