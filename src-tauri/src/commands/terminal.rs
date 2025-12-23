@@ -6,7 +6,6 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
-// Struct to track running executions
 #[tauri::command]
 pub async fn create_terminal(
     key: String,
@@ -41,7 +40,7 @@ pub async fn create_terminal(
     let terminal_connection = TerminalConnection {
         id: terminal_id.clone(),
         connection: Arc::new(client),
-        content_lines: Arc::new(Mutex::new(Vec::new())),
+        content_lines: Arc::new(Mutex::new(String::new())), // Changed to String
         current_executions: Arc::new(Mutex::new(Vec::new())),
         path: path.clone(),
     };
@@ -60,30 +59,31 @@ pub async fn create_terminal(
             let mut executions = current_executions.lock().await;
             executions.push(TerminalExecution {
                 stdin_tx: stdin_tx.clone(),
-                command: "shell".to_string(),
+                command: "bash".to_string(),
             });
         }
 
         let content_lines_clone = Arc::clone(&content_lines);
         let current_executions_clone = Arc::clone(&current_executions);
 
-        // Spawn task to collect stdout
+        // Spawn task to collect stdout as continuous stream
         tauri::async_runtime::spawn(async move {
             while let Some(data) = stdout_rx.recv().await {
                 let text = String::from_utf8_lossy(&data).to_string();
-                let mut lines = content_lines_clone.lock().await;
+
+                let mut content = content_lines_clone.lock().await;
+                content.push_str(&text);
                 
-                // Split by newlines and add each line
-                for line in text.split('\n') {
-                    if !line.is_empty() || text.ends_with('\n') {
-                        lines.push(line.to_string());
-                    }
+                // Keep only last 100KB to prevent memory issues
+                if content.len() > 100_000 {
+                    let trim_from = content.len() - 100_000;
+                    *content = content[trim_from..].to_string();
                 }
             }
         });
 
-        // Start an interactive shell with PTY
-        let shell_command = format!("cd {} && exec bash -i", path);
+        // Start an interactive bash shell with PTY
+        let shell_command = format!("cd {} && exec bash", path);
         let result = connection
             .execute_io(
                 &shell_command,
@@ -100,8 +100,8 @@ pub async fn create_terminal(
         executions.clear();
 
         if let Err(e) = result {
-            let mut lines = content_lines.lock().await;
-            lines.push(format!("Shell exited with error: {}", e));
+            let mut content = content_lines.lock().await;
+            content.push_str(&format!("\r\nShell exited with error: {}\r\n", e));
         }
     });
 
@@ -142,11 +142,11 @@ pub async fn execute_terminal_command(
 
     let executions = current_executions.lock().await;
 
-    // Get the last execution (the interactive shell)
-    if let Some(last_exec) = executions.last() {
+    // Get the bash execution
+    if let Some(bash_exec) = executions.first() {
         // Send command to stdin with newline
         let command_with_newline = format!("{}\n", command);
-        last_exec
+        bash_exec
             .stdin_tx
             .send(command_with_newline.into_bytes())
             .await
@@ -154,7 +154,7 @@ pub async fn execute_terminal_command(
         
         Ok(())
     } else {
-        Err("No active shell session".to_string())
+        Err("No active bash session".to_string())
     }
 }
 
@@ -182,10 +182,10 @@ pub async fn send_terminal_input(
 
     let executions = current_executions.lock().await;
 
-    // Get the last execution
-    if let Some(last_exec) = executions.last() {
-        // Send raw input (useful for Ctrl+C, etc.)
-        last_exec
+    // Get the bash execution
+    if let Some(bash_exec) = executions.first() {
+        // Send raw input (useful for Ctrl+C, arrow keys, etc.)
+        bash_exec
             .stdin_tx
             .send(input.into_bytes())
             .await
@@ -193,7 +193,7 @@ pub async fn send_terminal_input(
         
         Ok(())
     } else {
-        Err("No active shell session".to_string())
+        Err("No active bash session".to_string())
     }
 }
 
@@ -211,9 +211,9 @@ pub async fn close_terminal(key: String, terminal_id: String) -> Result<(), Stri
     // Before removing, try to close the shell gracefully
     if let Some(terminal) = terminals.iter().find(|t| t.id == terminal_id) {
         let executions = terminal.current_executions.lock().await;
-        if let Some(last_exec) = executions.last() {
+        if let Some(bash_exec) = executions.first() {
             // Send exit command
-            let _ = last_exec.stdin_tx.send(b"exit\n".to_vec()).await;
+            let _ = bash_exec.stdin_tx.send(b"exit\n".to_vec()).await;
         }
     }
 
@@ -244,43 +244,7 @@ pub async fn list_terminals(key: String) -> Result<Vec<(String, String)>, String
 }
 
 #[tauri::command]
-pub async fn get_terminal_pwd(key: String, terminal_id: String) -> Result<String, String> {
-    let project = get_project_by_key(&key)?;
-
-    let current_executions = {
-        let terminals = project
-            .terminal_connections
-            .lock()
-            .await;
-
-        let terminal = terminals
-            .iter()
-            .find(|t| t.id == terminal_id)
-            .ok_or_else(|| "Terminal not found".to_string())?;
-
-        Arc::clone(&terminal.current_executions)
-    };
-
-    let executions = current_executions.lock().await;
-
-    if let Some(last_exec) = executions.last() {
-        // Send pwd command
-        last_exec
-            .stdin_tx
-            .send(b"pwd\n".to_vec())
-            .await
-            .map_err(|e| format!("Failed to send pwd command: {}", e))?;
-        
-        // Note: The output will appear in content_lines
-        // You might want to implement a more sophisticated way to capture this
-        Ok("Check content_lines for result".to_string())
-    } else {
-        Err("No active shell session".to_string())
-    }
-}
-
-#[tauri::command]
-pub async fn get_terminal_content(key: String, terminal_id: String) -> Result<Vec<String>, String> {
+pub async fn get_terminal_content(key: String, terminal_id: String) -> Result<String, String> {
     let project = get_project_by_key(&key)?;
 
     let content_lines = {
@@ -297,8 +261,8 @@ pub async fn get_terminal_content(key: String, terminal_id: String) -> Result<Ve
         Arc::clone(&terminal.content_lines)
     };
 
-    let lines = content_lines.lock().await;
-    Ok(lines.clone())
+    let content = content_lines.lock().await;
+    Ok(content.clone())
 }
 
 #[tauri::command]
@@ -319,7 +283,7 @@ pub async fn clear_terminal_content(key: String, terminal_id: String) -> Result<
         Arc::clone(&terminal.content_lines)
     };
 
-    let mut lines = content_lines.lock().await;
-    lines.clear();
+    let mut content = content_lines.lock().await;
+    content.clear();
     Ok(())
 }

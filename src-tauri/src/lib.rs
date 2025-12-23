@@ -49,7 +49,6 @@ pub fn run() {
             commands::terminal::send_terminal_input,
             commands::terminal::close_terminal,
             commands::terminal::list_terminals,
-            commands::terminal::get_terminal_pwd,
             commands::terminal::clear_terminal_content,
             commands::terminal::get_terminal_content,
             commands::filesystem::get_dir_contents,
