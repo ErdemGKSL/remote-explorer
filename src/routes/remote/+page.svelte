@@ -12,6 +12,7 @@
 		Unplug,
 		Terminal as TerminalIcon,
 		Plus,
+        Link,
 	} from "@lucide/svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { Separator } from "$lib/components/ui/separator";
@@ -37,6 +38,7 @@
 		size: string;
 		permissions: string;
 		modified: string;
+		is_linked: boolean;
 	}
 
 	let currentPath = $state("");
@@ -455,7 +457,7 @@
 											<ContextMenu.Root>
 												<ContextMenu.Trigger>
 													<button
-														class="flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
+														class="relative flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
 														onclick={() =>
 															navigateToEntry(
 																entry,
@@ -466,6 +468,11 @@
 																entry,
 															)}
 													>
+														{#if entry.is_linked}
+															<Link
+																class="absolute left-1 top-1 h-3 w-3 bg-green-500 rounded-full"
+															/>
+														{/if}
 														{#if entry.is_dir}
 															<Folder
 																class="h-5 w-5 text-blue-500"

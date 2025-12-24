@@ -69,6 +69,7 @@ pub async fn get_dir_contents(key: String, path: String) -> Result<Vec<DirEntry>
                             size,
                             permissions,
                             modified,
+                            is_linked: true,
                         });
                     }
                     Err(_) => {
@@ -80,6 +81,7 @@ pub async fn get_dir_contents(key: String, path: String) -> Result<Vec<DirEntry>
                             size: "?".to_string(),
                             permissions,
                             modified: "?".to_string(),
+                            is_linked: true,
                         });
                     }
                 }
@@ -97,6 +99,7 @@ pub async fn get_dir_contents(key: String, path: String) -> Result<Vec<DirEntry>
                 size,
                 permissions,
                 modified,
+                is_linked: false,
             });
         }
     }

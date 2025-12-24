@@ -47,6 +47,7 @@ pub struct ProjectInfo {
 pub struct DirEntry {
     pub name: String,
     pub is_dir: bool,
+    pub is_linked: bool,
     pub size: String,
     pub permissions: String,
     pub modified: String,
