@@ -65,7 +65,7 @@ fi
 echo ""
 print_warning "This will update the version to ${GREEN}${NEW_VERSION}${NC} in:"
 echo "  • package.json"
-echo "  • PKGBUILD-bin"
+echo "  • PKGBUILD"
 echo "  • src-tauri/Cargo.toml"
 echo "  • src-tauri/tauri.conf.json"
 echo ""
@@ -85,13 +85,14 @@ print_info "Updating package.json..."
 jq --arg version "$NEW_VERSION" '.version = $version' package.json > package.json.tmp && mv package.json.tmp package.json
 print_success "Updated package.json"
 
-# 2. Update PKGBUILD-bin
-if [ -f "PKGBUILD-bin" ]; then
-    print_info "Updating PKGBUILD-bin..."
-    sed -i "s/^pkgver=.*/pkgver=${NEW_VERSION}/" PKGBUILD-bin
-    print_success "Updated PKGBUILD-bin"
+# 2. Update PKGBUILD
+if [ -f "PKGBUILD" ]; then
+    print_info "Updating PKGBUILD..."
+    sed -i "s/^pkgver=.*/pkgver=${NEW_VERSION}/" PKGBUILD
+    makepkg --printsrcinfo > .SRCINFO
+    print_success "Updated PKGBUILD"
 else
-    print_warning "PKGBUILD-bin not found, skipping..."
+    print_warning "PKGBUILD not found, skipping..."
 fi
 
 # 3. Update src-tauri/Cargo.toml
@@ -124,7 +125,7 @@ echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     print_info "Committing changes..."
-    git add package.json PKGBUILD-bin src-tauri/Cargo.toml src-tauri/tauri.conf.json 2>/dev/null || true
+    git add package.json PKGBUILD src-tauri/Cargo.toml src-tauri/tauri.conf.json 2>/dev/null || true
     git commit -m "chore: bump version to ${NEW_VERSION}"
     print_success "Changes committed"
     
