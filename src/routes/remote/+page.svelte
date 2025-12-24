@@ -546,7 +546,7 @@
 			<Resizable.Handle />
 
 			<!-- Terminal Pane -->
-			<Resizable.Pane defaultSize={30} minSize={20}>
+			<Resizable.Pane defaultSize={30} minSize={20} maxSize={70}>
 				{#if currentPathTerminals.length === 1}
 					<!-- Single terminal - full width -->
 					<div class="h-full">

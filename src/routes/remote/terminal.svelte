@@ -104,8 +104,8 @@
 	</div>
 
 	<!-- Terminal Content -->
-	<div class="flex-1 flex flex-col min-h-0">
-		<ScrollArea class="flex-1 px-4" bind:ref={scrollContainer}>
+	<div class="flex-1 flex flex-col min-h-0 h-full">
+		<ScrollArea class="flex-1 px-4 h-[calc(100%-3.5rem)]" bind:ref={scrollContainer}>
 			<div class="py-2 space-y-0.5 font-roboto-mono! font-mono text-sm">
 				{#each terminal.history as line, i (i)}
 					{#if line.type === "command"}
@@ -138,7 +138,7 @@
 		</ScrollArea>
 
 		<!-- Terminal Input -->
-		<div class="border-t px-4 py-2 bg-muted/10">
+		<div class="border-t px-4 py-2 bg-muted/10 h-14">
 			<form onsubmit={handleSubmit} class="flex gap-2 items-center">
 				<span class="text-green-600 dark:text-green-400 font-mono text-sm select-none">$</span>
 				<Input
