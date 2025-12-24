@@ -49,7 +49,8 @@ pub async fn create_terminal(
     let connection = Arc::clone(&terminal_connection.connection);
     let content_lines = Arc::clone(&terminal_connection.content_lines);
     let current_executions = Arc::clone(&terminal_connection.current_executions);
-
+    let project_clone = project.clone();
+    let terminal_id_clone = terminal_id.clone();
     tauri::async_runtime::spawn(async move {
         let (stdout_tx, mut stdout_rx) = mpsc::channel::<Vec<u8>>(100);
         let (stdin_tx, stdin_rx) = mpsc::channel::<Vec<u8>>(100);
@@ -66,10 +67,23 @@ pub async fn create_terminal(
         let content_lines_clone = Arc::clone(&content_lines);
         let current_executions_clone = Arc::clone(&current_executions);
 
+        let project_clone = project_clone.clone();
+        let terminal_id_clone = terminal_id_clone.clone();
         // Spawn task to collect stdout as continuous stream
         tauri::async_runtime::spawn(async move {
             while let Some(data) = stdout_rx.recv().await {
-                let text = String::from_utf8_lossy(&data).to_string();
+                let text = String::from_utf8_lossy(&data).trim().to_string();
+
+                if let Some(password_clone) = project_clone.password.clone() {
+                    if &text == &format!("[sudo] password for {}:", project_clone.user) {
+                        let _ = execute_terminal_command(project_clone.key.clone(), terminal_id_clone.clone(), password_clone).await;
+                        continue; // Skip sudo password prompts
+                    }
+                }
+
+                if (text.ends_with("$") || text.ends_with(":")) && text.contains(project_clone.user.as_str()) && !text.starts_with("[sudo] ") {
+                    continue; // Skip prompt lines
+                }
 
                 let mut content = content_lines_clone.lock().await;
                 content.push_str(&text);
