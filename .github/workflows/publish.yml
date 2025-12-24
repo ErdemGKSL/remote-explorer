@@ -1,10 +1,12 @@
-name: 'publish'
+name: 'release'
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 'main'
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.1.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -317,11 +319,10 @@ jobs:
           name: tauri-fedora-linux
           path: release-fedora/*.rpm
 
-  create-dev-release:
-    name: Create Development Release
+  create-release:
+    name: Create Stable Release
     runs-on: ubuntu-latest
     needs: [publish-tauri, build-arch-package, build-fedora-package]
-    if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
       packages: read
@@ -340,56 +341,33 @@ jobs:
           find artifacts -type f -exec cp {} release/ \;
           ls -la release
 
-      - name: generate dev tag
-        id: tag
-        run: |
-          TAG="dev-$(date +'%Y%m%d-%H%M%S')"
-          BUILD_DATE="$(date +'%B %d, %Y at %H:%M:%S UTC')"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
-
-      - name: create development release
+      - name: create stable release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: "Development Release ${{ steps.tag.outputs.tag }}"
+          tag_name: ${{ inputs.version }}
+          name: "Release ${{ inputs.version }}"
           body: |
-            🚀 **Automatic Development Release**
+            🚀 **Stable Release ${{ inputs.version }}**
 
-            **Branch:** ${{ github.ref_name }}
-            **Commit:** ${{ github.sha }}
-            **Build Date:** ${{ steps.tag.outputs.build_date }}
+            ## Installation
 
-            This release was generated automatically from the latest commit.
+            ### Linux
+            - **Arch Linux**: Download the `.pkg.tar.zst` file and install with `sudo pacman -U remote-explorer-bin-*.pkg.tar.zst`
+            - **Fedora/RHEL**: Download the `.rpm` file and install with `sudo dnf install ./remote-explorer-*.rpm`
+            - **Debian/Ubuntu**: Download the `.deb` file and install with `sudo apt install ./Remote.Explorer_*_amd64.deb`
+            - **AppImage**: Download and run `chmod +x Remote.Explorer_*_amd64.AppImage && ./Remote.Explorer_*_amd64.AppImage`
 
-            ## Included Artifacts
-            All platform installers produced by the Tauri build matrix are attached.
+            ### macOS
+            Download the `.dmg` file for your architecture (Apple Silicon or Intel)
+
+            ### Windows
+            Download and run the `.msi` installer
+
+            ### Android
+            Download and install the `remote-explorer.apk`
+
+            ## Full Changelog
+            See commit history for detailed changes.
           files: release/*
           draft: false
           prerelease: false
-
-  cleanup-old-dev-releases:
-    name: Cleanup Old Dev Releases
-    runs-on: ubuntu-latest
-    needs: create-dev-release
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-
-    steps:
-      - name: delete old dev releases
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const releases = await github.rest.repos.listReleases({ owner, repo });
-
-            const devReleases = releases.data.filter(r => r.tag_name.startsWith('dev-'));
-            const toDelete = devReleases.slice(3);
-
-            for (const release of toDelete) {
-              await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
-              try {
-                await github.rest.git.deleteRef({ owner, repo, ref: `tags/${release.tag_name}` });
-              } catch (e) {}
-            }
