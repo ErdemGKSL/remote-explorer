@@ -240,11 +240,87 @@ jobs:
           name: tauri-arch-linux
           path: release-arch/*.pkg.tar.zst
 
+  build-fedora-package:
+    name: Build Fedora RPM Package
+    runs-on: ubuntu-latest
+    needs: publish-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: prepare release directory
+        run: |
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+          ls -la release
+
+      - name: list artifacts
+        run: |
+          echo "Contents of release directory:"
+          ls -laR release/
+          
+      - name: build fedora rpm
+        run: |
+          DEB_FILE=$(find release -name "*.deb" -type f | head -n 1)
+          if [ -z "$DEB_FILE" ]; then
+            echo "No .deb file found in release directory"
+            exit 1
+          fi
+          echo "Found: $DEB_FILE"
+
+          # Extract version from deb filename
+          DEB_NAME=$(basename "$DEB_FILE")
+          VERSION=$(echo "$DEB_NAME" | sed -n 's/.*_\([0-9.]*\)_amd64.deb/\1/p')
+          echo "Detected version: $VERSION"
+          
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from: $DEB_NAME"
+            exit 1
+          fi
+          
+          # Create output directory
+          mkdir -p release-fedora
+          
+          # Build RPM in Fedora container
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            fedora:latest bash -c "
+            set -e
+            
+            # Install required tools
+            dnf install -y rpm-build rpmdevtools alien
+            
+            # Convert deb to rpm using alien
+            alien -r -k '$DEB_FILE'
+            
+            # Find the generated RPM
+            RPM_FILE=\$(find . -name '*.rpm' -type f | head -n 1)
+            
+            if [ -z \"\$RPM_FILE\" ]; then
+              echo 'No RPM file was generated'
+              exit 1
+            fi
+            
+            # Move to output directory
+            mv \"\$RPM_FILE\" release-fedora/remote-explorer-${VERSION}.x86_64.rpm
+            chmod 644 release-fedora/*.rpm
+          "
+
+      - name: upload fedora package
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-fedora-linux
+          path: release-fedora/*.rpm
 
   create-dev-release:
     name: Create Development Release
     runs-on: ubuntu-latest
-    needs: [publish-tauri, build-arch-package]
+    needs: [publish-tauri, build-arch-package, build-fedora-package]
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
