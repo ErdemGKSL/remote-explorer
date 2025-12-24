@@ -194,7 +194,7 @@ jobs:
           cd arch-build
           
           # Copy PKGBUILD-bin as PKGBUILD
-          # cp ../PKGBUILD-bin PKGBUILD
+          cp ../PKGBUILD PKGBUILD
           
           # Extract version from deb filename
           DEB_NAME=$(basename "$DEB_FILE")
