@@ -366,7 +366,7 @@ jobs:
             All platform installers produced by the Tauri build matrix are attached.
           files: release/*
           draft: false
-          prerelease: false
+          prerelease: true
 
   cleanup-old-dev-releases:
     name: Cleanup Old Dev Releases
