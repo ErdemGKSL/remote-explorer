@@ -125,7 +125,7 @@ echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     print_info "Committing changes..."
-    git add package.json PKGBUILD src-tauri/Cargo.toml src-tauri/tauri.conf.json 2>/dev/null || true
+    git add package.json PKGBUILD src-tauri/Cargo.toml src-tauri/tauri.conf.json .SRCINFO 2>/dev/null || true
     git commit -m "chore: bump version to ${NEW_VERSION}"
     print_success "Changes committed"
     
