@@ -412,8 +412,8 @@
 			title="New Terminal"
 			class="gap-1"
 		>
-			<Plus class="h-4 w-4" />
 			<TerminalIcon class="h-4 w-4" />
+			<Plus class="h-4 w-4" />
 		</Button>
 		{#if isMobileBuild}
 			<Button variant="ghost" size="icon" onclick={closeConnection}>
@@ -457,7 +457,7 @@
 											<ContextMenu.Root>
 												<ContextMenu.Trigger>
 													<button
-														class="relative flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
+														class="relative flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors border-t-black/5 border-[0.1px]"
 														onclick={() =>
 															navigateToEntry(
 																entry,
@@ -470,7 +470,7 @@
 													>
 														{#if entry.is_linked}
 															<Link
-																class="absolute left-1 top-1 h-3 w-3 bg-green-500 rounded-full"
+															class="absolute left-2 top-2 h-4 w-3 {entry.is_dir ? "text-blue-500" : "text-muted-foreground"}"
 															/>
 														{/if}
 														{#if entry.is_dir}
@@ -543,6 +543,7 @@
 										<div
 											class="flex w-full items-center gap-3 px-4 py-2 bg-accent/50"
 										>
+
 											{#if creatingType === "folder"}
 												<Folder
 													class="h-5 w-5 text-blue-500"
@@ -748,13 +749,18 @@
 									<ContextMenu.Root>
 										<ContextMenu.Trigger>
 											<button
-												class="flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
+												class="relative flex w-full items-center gap-3 px-4 py-2 hover:bg-accent transition-colors"
 												onclick={() =>
 													navigateToEntry(entry)}
 												ondblclick={() =>
 													entry.is_dir &&
 													navigateToEntry(entry)}
 											>
+												{#if entry.is_linked}
+													<Link
+														class="absolute left-2 top-2 h-4 w-3 {entry.is_dir ? "text-blue-500" : "text-muted-foreground"}"
+													/>
+												{/if}
 												{#if entry.is_dir}
 													<Folder
 														class="h-5 w-5 text-blue-500"
