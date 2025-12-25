@@ -182,22 +182,8 @@ jobs:
             echo "No .deb file found in release directory"
             exit 1
           fi
-          echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
           echo "Found: $DEB_FILE"
 
-          # Install required tools
-          sudo apt-get update
-          sudo apt-get install -y libarchive-tools
-          
-          # Create build directory
-          mkdir -p arch-build
-          cd arch-build
-          
-          # Copy PKGBUILD-bin as PKGBUILD
-          cp ../PKGBUILD PKGBUILD
-          cp ../remote-explorer-bin.install remote-explorer-bin.install
-          cp ../.SRCINFO .SRCINFO
-          
           # Extract version from deb filename
           DEB_NAME=$(basename "$DEB_FILE")
           VERSION=$(echo "$DEB_NAME" | sed -n 's/.*_\([0-9.]*\)_amd64.deb/\1/p')
@@ -208,34 +194,47 @@ jobs:
             exit 1
           fi
           
-          # Copy the deb file to the build directory (handle spaces in filename)
-          cp "../$DEB_FILE" "remote-explorer-${VERSION}.deb"
+          # Create output directory
+          mkdir -p release-arch
           
-          # Calculate SHA256
-          SHA256=$(sha256sum "remote-explorer-${VERSION}.deb" | awk '{print $1}')
-          echo "SHA256: $SHA256"
-          
-          # Update PKGBUILD with version and checksum
-          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
-          sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
-          
-          # Create output directory with proper permissions
-          mkdir -p ../release-arch
-          
-          # Build in Docker with proper UID mapping
+          # Repackage deb to Arch package directly
           docker run --rm \
-            -v "$PWD:/pkg" \
-            -v "$PWD/../release-arch:/output" \
+            -v "$PWD:/workspace" \
+            -w /workspace \
             archlinux:latest bash -c "
             set -e
-            pacman -Sy --noconfirm base-devel libarchive
-            useradd -m builder
-            chown -R builder:builder /pkg
-            cd /pkg
-            su builder -c 'makepkg --nodeps --skippgpcheck'
-            # Copy as root to ensure permissions
-            cp *.pkg.tar.zst /output/
-            chmod 644 /output/*.pkg.tar.zst
+            
+            # Install required tools
+            pacman -Sy --noconfirm libarchive dpkg
+            
+            # Create working directory
+            mkdir -p arch-pkg
+            cd arch-pkg
+            
+            # Extract the deb file
+            dpkg-deb -x '/workspace/$DEB_FILE' ./extracted
+            
+            # Create package structure
+            mkdir -p pkg
+            cp -r extracted/* pkg/
+            
+            # Create .PKGINFO file
+            cat > pkg/.PKGINFO << EOF
+              pkgname = remote-explorer-bin
+              pkgver = ${VERSION}-1
+              pkgdesc = Remote file explorer and manager
+              url = https://github.com/ErdemGKSL/remote-explorer
+              arch = x86_64
+              license = MIT
+              packager = GitHub Actions
+            EOF
+            
+            # Create the package archive
+            cd pkg
+            bsdtar -czf /workspace/release-arch/remote-explorer-bin-${VERSION}-1-x86_64.pkg.tar.zst .PKGINFO *
+            
+            # Set proper permissions
+            chmod 644 /workspace/release-arch/*.pkg.tar.zst
           "
 
       - name: upload arch package
