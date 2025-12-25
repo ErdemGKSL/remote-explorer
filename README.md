@@ -1,6 +1,6 @@
 # Remote Explorer
 
-A cross-platform desktop application for exploring and managing remote file systems via SSH connections. Built with Tauri, SvelteKit, and Rust, this app provides a native file explorer experience for remote servers.
+A cross-platform desktop & mobile application for exploring and managing remote file systems via SSH connections. Built with Tauri, SvelteKit, and Rust, this app provides a native file explorer experience for remote servers.
 
 <img width="1394" height="899" alt="image" src="https://github.com/user-attachments/assets/7eef3eea-9924-4a83-bb24-6275ac0057ae" />
 
