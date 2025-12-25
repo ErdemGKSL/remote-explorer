@@ -152,97 +152,6 @@ jobs:
           name: tauri-${{ matrix.platform }}-${{ matrix.args }}
           path: release/*
 
-  build-arch-package:
-    name: Build Arch Linux Package
-    runs-on: ubuntu-latest
-    needs: publish-tauri
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: prepare release directory
-        run: |
-          mkdir -p release
-          find artifacts -type f -exec cp {} release/ \;
-          ls -la release
-
-      - name: list artifacts
-        run: |
-          echo "Contents of release directory:"
-          ls -laR release/
-          
-      - name: build arch package
-        run: |
-          DEB_FILE=$(find release -name "*.deb" -type f | head -n 1)
-          if [ -z "$DEB_FILE" ]; then
-            echo "No .deb file found in release directory"
-            exit 1
-          fi
-          echo "Found: $DEB_FILE"
-
-          # Extract version from deb filename
-          DEB_NAME=$(basename "$DEB_FILE")
-          VERSION=$(echo "$DEB_NAME" | sed -n 's/.*_\([0-9.]*\)_amd64.deb/\1/p')
-          echo "Detected version: $VERSION"
-          
-          if [ -z "$VERSION" ]; then
-            echo "Failed to extract version from: $DEB_NAME"
-            exit 1
-          fi
-          
-          # Create output directory
-          mkdir -p release-arch
-          
-          # Repackage deb to Arch package directly
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            archlinux:latest bash -c "
-            set -e
-            
-            # Install required tools
-            pacman -Sy --noconfirm libarchive dpkg
-            
-            # Create working directory
-            mkdir -p arch-pkg
-            cd arch-pkg
-            
-            # Extract the deb file
-            dpkg-deb -x '/workspace/$DEB_FILE' ./extracted
-            
-            # Create package structure
-            mkdir -p pkg
-            cp -r extracted/* pkg/
-            
-            # Create .PKGINFO file
-            cat > pkg/.PKGINFO << EOF
-              pkgname = remote-explorer-bin
-              pkgver = ${VERSION}-1
-              pkgdesc = Remote file explorer and manager
-              url = https://github.com/ErdemGKSL/remote-explorer
-              arch = x86_64
-              license = MIT
-              packager = GitHub Actions
-            EOF
-            
-            # Create the package archive
-            cd pkg
-            bsdtar -czf /workspace/release-arch/remote-explorer-bin-${VERSION}-1-x86_64.pkg.tar.zst .PKGINFO *
-            
-            # Set proper permissions
-            chmod 644 /workspace/release-arch/*.pkg.tar.zst
-          "
-
-      - name: upload arch package
-        uses: actions/upload-artifact@v4
-        with:
-          name: tauri-arch-linux
-          path: release-arch/*.pkg.tar.zst
-
   build-fedora-package:
     name: Build Fedora RPM Package
     runs-on: ubuntu-latest
@@ -323,7 +232,7 @@ jobs:
   create-release:
     name: Create Stable Release
     runs-on: ubuntu-latest
-    needs: [publish-tauri, build-arch-package, build-fedora-package]
+    needs: [publish-tauri, build-fedora-package]
     permissions:
       contents: write
       packages: read
@@ -353,7 +262,7 @@ jobs:
             ## Installation
 
             ### Linux
-            - **Arch Linux**: Download the `.pkg.tar.zst` file and install with `sudo pacman -U remote-explorer-bin-*.pkg.tar.zst`
+            - **Arch Linux**: Aur package available at [Remote Explorer AUR](https://aur.archlinux.org/packages/remote-explorer-bin), you can install it with `yay -S remote-explorer-bin`
             - **Fedora/RHEL**: Download the `.rpm` file and install with `sudo dnf install ./remote-explorer-*.rpm`
             - **Debian/Ubuntu**: Download the `.deb` file and install with `sudo apt install ./Remote.Explorer_*_amd64.deb`
             - **AppImage**: Download and run `chmod +x Remote.Explorer_*_amd64.AppImage && ./Remote.Explorer_*_amd64.AppImage`
