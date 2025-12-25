@@ -4,6 +4,7 @@
   - [x] Create & Delete for file & folder
   - [x] Navigation
   - [ ] Edit content of an file
+  - [ ] File & Folder pasting
   - [x] Handle symlinks
 - [x] Terminal
   - [x] pty piping
