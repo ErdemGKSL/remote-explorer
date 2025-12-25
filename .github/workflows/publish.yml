@@ -36,6 +36,9 @@ jobs:
             args: ''
           - platform: 'windows-latest'
             args: ''
+          # RPM build for Fedora
+          - platform: 'ubuntu-22.04'
+            args: '--bundles rpm'
           # Android APK build
           - platform: 'ubuntu-22.04'
             args: 'android'
@@ -64,6 +67,12 @@ jobs:
             patchelf \
             pkg-config \
             xdg-utils
+
+      # ---------- RPM specific dependencies ----------
+      - name: install RPM build tools
+        if: contains(matrix.args, 'rpm')
+        run: |
+          sudo apt-get install -y rpm
 
       # ---------- Android SDK / NDK ----------
       - name: setup Android SDK
@@ -137,6 +146,7 @@ jobs:
           find src-tauri -type f \( \
             -name "*.AppImage" -o \
             -name "*.deb" -o \
+            -name "*.rpm" -o \
             -name "*.msi" -o \
             -name "*setup.exe" -o \
             -name "*.dmg" -o \
@@ -186,6 +196,7 @@ jobs:
 
             ### Linux
             - **Arch Linux**: Aur package available at [Remote Explorer AUR](https://aur.archlinux.org/packages/remote-explorer-bin), you can install it with `yay -S remote-explorer-bin`
+            - **Fedora/RHEL/CentOS**: Download the `.rpm` file and install with `sudo dnf install ./Remote.Explorer_*_amd64.rpm` or `sudo rpm -i ./Remote.Explorer_*_amd64.rpm`
             - **Debian/Ubuntu**: Download the `.deb` file and install with `sudo apt install ./Remote.Explorer_*_amd64.deb`
             - **AppImage**: Download and run `chmod +x Remote.Explorer_*_amd64.AppImage && ./Remote.Explorer_*_amd64.AppImage`
 
