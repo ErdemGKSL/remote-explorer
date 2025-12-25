@@ -4029,7 +4029,7 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "remote-explorer"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "async-ssh2-tokio",
  "lazy_static",
