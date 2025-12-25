@@ -15,3 +15,4 @@
   - [ ] Push
   - [ ] Force pull
 - [ ] Service Management
+- [ ] Dark theme
