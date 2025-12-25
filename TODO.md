@@ -14,3 +14,4 @@
   - [ ] Show current git status
   - [ ] Push
   - [ ] Force pull
+- [ ] Service Management
